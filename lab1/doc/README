@@ -1,0 +1,15 @@
+Name: Trystan Nguyen
+ID: 1579170
+
+Files:
+	myweb.c
+		Source file of executable binary "myweb".
+
+	Makefile
+		makefile for myweb.c to be created into myweb. Must be in the same directory as source file.
+
+	myweb
+		Excutable binary equivalent of wget which takes host site url and ip address with path to file as parameters. Has configuration option to print the header to console without downloading the requested file.
+
+	Documentation
+		Desciption of how myweb operates and internal design.

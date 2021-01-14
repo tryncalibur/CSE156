@@ -1,0 +1,4 @@
+When myweb is started, it will check basic attibutes the initial arguements to see if they are acceptable. It will then parse the arguements into ip, port, and file path. Using the parsed data, the Get and Head html protocol commands will be generated. Next, server address and sockets will be initialized and configured as needed, while checking to see if the parsed data can be accepted. After a connection is made, the program will call Head html command and recieve the header. From this, the header size and body size can be retrieved. The program then calls the Get command and will continue to recieve data up to a size equal to the header and body size.
+
+
+The shortcoming of this program is that it only works the header is of an older origin withe the phrase "Content-Length: ". Additionally, the program requires the user to manually input the ip address of the server rather then searching for it internally. 
