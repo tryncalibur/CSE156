@@ -35,6 +35,7 @@ int input_timeout (int fd, unsigned int secs){
 }
 
 // Use to send a request to a server for a chunk
+// Use after confirming server has file
 int getChunkFromServer(char* fileName, int c, int cNum, int cl, int clNum, int fS, int sfd, struct sockaddr_in addr){
   struct Message getChunk;
   strcpy(getChunk.type, "Request");
@@ -52,24 +53,37 @@ int getChunkFromServer(char* fileName, int c, int cNum, int cl, int clNum, int f
   return 1;
 }
 
+// Seperate filename from path
+char* getFileName(char* filePath){
+  char* first;
+  char* second;
+  first = strtok(filePath, "/");
+  second = strtok(NULL, "/");
+  while(second != NULL){
+    first = second;
+    second = strtok(NULL, "/");
+  }
+  return first;
+}
+
 
 //-----------------------------------------------------------------------------------------------------------------------
 int main(int argc, char* argv[]){
-  // Check Parameters
+  // Check runtime arguements
   if (argc != 4){
     fprintf(stderr, "Usage: ./myclient <server-info.txt> <num-chunk> <filename-path>\n");
-    return -1;
+    exit(1);
   }
 
   if (access (argv[1], F_OK) != 0){
     fprintf(stderr, "Error: ServerList does not exist\n");
-    return -1;
+    exit(1);
   }
 
   int numchunks = atoi(argv[2]);
   if (numchunks <= 0){
     fprintf(stderr, "Error: <num-chunks> must be a valid integer\n");
-    return -1;
+    exit(1);
   }
 
   
@@ -77,17 +91,18 @@ int main(int argc, char* argv[]){
   int sockfd = socket(AF_INET, SOCK_DGRAM, 0);
   if (sockfd < 0){
     fprintf(stderr, "Error: Unable to create socket\n");
-    return -1;
+    exit(1);
   }
 
 
   //------------------------------------------------------------------------------------------------------------------
-  // Check Servers
+  // Check Servers Avaliability
   int fileSize = 0;
   FILE *serverList = fopen(argv[1], "rb");
   if (serverList == NULL){
     fprintf(stderr, "Error: Unable to read file\n");
-    return -1;
+    close(sockfd);
+    exit(1);
   }
   
   int numberOfServers = 0;
@@ -97,7 +112,7 @@ int main(int argc, char* argv[]){
   }
   rewind(serverList);
   
-  // Dertermine Avaliable Servers
+  // Dertermine Server's Existance
   struct sockaddr_in servers[numberOfServers];
   int current = 0;
   while(fgets(line, sizeof(line), serverList)){
@@ -112,8 +127,7 @@ int main(int argc, char* argv[]){
     temp.sin_port = htons(atoi(port));
     if (inet_pton(AF_INET, ip, &temp.sin_addr.s_addr) <= 0){
       fprintf(stderr, "Error: <server-info> contains unformatted IP\n");
-      fclose(serverList);
-      return -1;
+      continue;
     }
     
     // Check for IP and Port repetition
@@ -141,8 +155,9 @@ int main(int argc, char* argv[]){
                       (const struct sockaddr*)&temp, sizeof(temp));
       if (sent < 0){
         fprintf(stderr, "Error: Unable to send check\n");
+        close(sockfd);
         fclose(serverList);
-        return -1;
+        exit(1);
       }
       res = input_timeout(sockfd, 2);
 
@@ -153,8 +168,9 @@ int main(int argc, char* argv[]){
         int recv = recvfrom(sockfd, (struct Message*)&recvMsg, sizeof(recvMsg), 0, (struct sockaddr*)&temp, &len);
         if (recv < 0){
           fprintf(stderr, "Error: Unable to recieve check response\n");
+          close(sockfd);
           fclose(serverList);
-          return -1;
+          exit(1);
         }
         
         // Save Server info if file exits
@@ -162,8 +178,9 @@ int main(int argc, char* argv[]){
           if (fileSize != 0){
               if (recvMsg.length != fileSize){
                 fprintf(stderr, "Error: FileSize Difference between servers\n");
+                close(sockfd);
                 fclose(serverList);
-                return -1;
+                exit(1);
               }
           }
           servers[current] = temp;
@@ -171,22 +188,23 @@ int main(int argc, char* argv[]){
           ++current;
           break;
         }
-        else{
+        else if (strcmp(recvMsg.type, "No") == 0){
           break;
         }
         break;
       }
 
-      // End Connection after 10 attempts
+      // End Connection after 5 failed attempts
       else{
         ++counter;
-        if (counter >= 10) break;
+        if (counter >= 5) break;
         sent = sendto(sockfd, (const struct Message*)&check, sizeof(check), 0, 
                       (const struct sockaddr*)&temp, sizeof(temp));
         if (sent < 0){
           fprintf(stderr, "Error: Unable to send check\n");
+          close(sockfd);
           fclose(serverList);
-          return -1;
+          exit(1);
         }
       }
 
@@ -194,22 +212,22 @@ int main(int argc, char* argv[]){
   }
   fclose(serverList);
   //------------------------------------------------------------------------------------------------------------------
-
-
   // End if no Servers are avaliable
   if (current == 0){
-    fprintf(stderr, "Error: Servers do not contain <filename-path>\n");
-    return -1;
+    fprintf(stderr, "Error: Servers do not satisfy prerequisite\n");
+    close(sockfd);
+    exit(1);
   }
   // Create empty file and end if filesize is 0
   if (fileSize == 0){
-    FILE* output = fopen(argv[3], "wb");
+    FILE* output = fopen(getFileName(argv[3]), "wb");
     if (output == NULL){
       fprintf(stderr, "Error: Unable to write new file\n");
-      return -1;
+      close(sockfd);
+      exit(1);
     }
     fclose(output);
-    return 0;
+    exit(0);
   }
 
   //------------------------------------------------------------------------------------------------------------------
@@ -226,8 +244,7 @@ int main(int argc, char* argv[]){
   // Assign chunk to server
   int chunkGetServer[numchunks];
   for(int i = 0; i < numchunks; ++i){
-    if (i < current) chunkGetServer[i] = i;
-    else chunkGetServer[i] = -1;
+    chunkGetServer[i] = i % current;
   }
 
 
@@ -243,7 +260,8 @@ int main(int argc, char* argv[]){
         int recv = recvfrom(sockfd, (struct Message*)&recvChunk, sizeof(recvChunk), 0, NULL , NULL);
         if (recv < 0){
           fprintf(stderr, "Error: Unable to recieve check response\n");
-          return -1;
+          close(sockfd);
+          exit(1);
         }
 
         // Determine if Message is relevent
@@ -269,7 +287,8 @@ int main(int argc, char* argv[]){
                                             fileSize, sockfd, servers[chunkGetServer[i]]);
                   if (x < 0){
                     fprintf(stderr, "Error: Unable to send Request for chunk\n");
-                    return -1;
+                    close(sockfd);
+                    exit(1);
                   }
                   break;
                 }
@@ -283,7 +302,8 @@ int main(int argc, char* argv[]){
                                         sockfd, servers[chunkGetServer[i]]);
               if (x < 0){
                 fprintf(stderr, "Error: Unable to send Request for chunk\n");
-                return -1;
+                close(sockfd);
+                exit(1);
               }
             }
           }
@@ -295,15 +315,16 @@ int main(int argc, char* argv[]){
         // Handle Dead Server
         if (deadlock > current){
           for(int i = 0; i < numchunks; ++i){
-            if (chunkGetServer[i] >= 0)chunkGetServer[i]++;
+            if (chunkGetServer[i] >= 0) chunkGetServer[i]++;
             if (chunkGetServer[i] >= current) chunkGetServer[i] = 0;
           }
         }
         if (deadlock > 2*current){
           fprintf(stderr, "Error: All servers ended connection\n");
-          return -1;
+          close(sockfd);
+          exit(1);
         }
-
+        // Resend Requests
         int isDone = 0;
         for (int i = 0; i < numchunks; ++i){
           if (chunkGetServer[i] >= 0){
@@ -311,7 +332,8 @@ int main(int argc, char* argv[]){
                                       sockfd, servers[chunkGetServer[i]]);
             if (x < 0){
               fprintf(stderr, "Error: Unable to send Request for chunk\n");
-              return -1;
+              close(sockfd);
+              exit(1);
             }
           }
           else ++isDone; 
@@ -320,29 +342,19 @@ int main(int argc, char* argv[]){
         ++deadlock;
       }
     }
-
+    close(sockfd);
 //------------------------------------------------------------------------------------------------------------------
 
 
     
     // Write to File
-    FILE* output = fopen(argv[3], "wb");
+    FILE* output = fopen(getFileName(argv[3]), "wb");
     if (output == NULL){
       fprintf(stderr, "Error: Unable to write new file\n");
-      return -1;
+      exit(1);
     }
-
     for(int i = 0 ; i < numchunks; ++i){
       fprintf(output, "%s", fileToString[i]);
     }
-
     fclose(output);
-    
-    /*
-    for(int i = 0 ; i < numchunks; ++i){
-      printf ("%s", fileToString[i]);
-    }
-    printf("\n");
-    */
-    
 }

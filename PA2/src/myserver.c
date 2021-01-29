@@ -39,20 +39,20 @@ int main(int argc, char* argv[]){
 	// Check Parameters
 	if (argc != 2){
 		fprintf(stderr, "Expected Format: ./myserver <port-number>\n");
-    	return -1;
+    	exit(1);
 	}
 
 	int port = atoi(argv[1]);
 	if (port == 0){
 		fprintf(stderr, "Error: Enter valid port");
-    	return -1;
+    	exit(1);
 	}
 
 	// Create SocketFD
 	int sockfd = socket(AF_INET, SOCK_DGRAM, 0);
 	if (sockfd < 0){
 		fprintf(stderr, "Error: Socket Creation failed\n");
-    	return -1;
+    	exit(1);
 	}
 
 	// Server Info
@@ -67,7 +67,8 @@ int main(int argc, char* argv[]){
 	// Bind
 	if (bind(sockfd, (const struct sockaddr*)&servaddr, sizeof(servaddr)) < 0){
 		fprintf(stderr, "Error: Bind Failed\n");
-    	return -1;
+		close (sockfd);
+    	exit(1);
 	}
 
 
@@ -79,7 +80,8 @@ int main(int argc, char* argv[]){
   			int pid = fork();
   			if (pid < 0){
   				fprintf(stderr, "Error: Failed to fork\n");
-    			return -1;
+  				close (sockfd);
+    			exit(1);
   			}
   			if (pid == 0){
   				// Read Message in child process
@@ -89,16 +91,19 @@ int main(int argc, char* argv[]){
 				n = recvfrom(sockfd, (struct Message*)&recvMsg, sizeof(recvMsg), 0, (struct sockaddr*)&cliaddr, &len);
 				if (n < 0){
 					fprintf(stderr, "Error: Faild to Recieve Message\n");
-    				return -1;
+					close (sockfd);
+    				exit(1);
 				}
 
 				// Determine Response
+				// Respond to check protocol
 				if (strcmp(recvMsg.type, "Check") == 0){
 					struct Message confirm;
 					char fileName[1024];
 					memset(fileName, '\0', sizeof(fileName));
 					strcpy(fileName, recvMsg.data);
 
+					// Check file existance
   					if (access (fileName, F_OK | R_OK) != 0){
   						strcpy(confirm.type, "No");
   					}
@@ -107,7 +112,8 @@ int main(int argc, char* argv[]){
   						FILE* f = fopen(fileName, "rb");
   						if (f == NULL){
 					    	fprintf(stderr, "Error: Unable to read file\n");
-						    return -1;
+					    	close (sockfd);
+						    exit(1);
 					  	}
 					  	int fileSize = 0;
 					  	char line[1024];
@@ -120,11 +126,12 @@ int main(int argc, char* argv[]){
   					int sent = sendto(sockfd, (const struct Message*)&confirm, sizeof(confirm), MSG_CONFIRM, (const struct sockaddr *)&cliaddr, len);
   					if(sent < 0){
   						fprintf(stderr, "Error: Failed to send Confirmation\n");
-    					return -1;
+  						close (sockfd);
+    					exit(1);
   					}
 				}
+				// Respond to Request for chunk
 				else if(strcmp(recvMsg.type, "Request") == 0){
-					//printf("Recieve Chunk: %d, %d\n", recvMsg.chunk, recvMsg.chunklet);
 					struct Message respond;
 					strcpy(respond.type, "Chunk");
 					respond.chunk = recvMsg.chunk;
@@ -135,7 +142,8 @@ int main(int argc, char* argv[]){
 					FILE* readF = fopen(recvMsg.data, "rb");
 					if (readF == NULL){
 				    	fprintf(stderr, "Error: Unable to read file\n");
-					    return -1;
+				    	close (sockfd);
+    					exit(1);
 				  	}
 
 				  	int chunkSize = (int) ceil((double) recvMsg.length / recvMsg.chunkTotal);
@@ -143,6 +151,13 @@ int main(int argc, char* argv[]){
 				  	int chunkletSize = (int) ceil((double)chunkSize / recvMsg.chunkletTotal);
 				  	position += (chunkletSize * recvMsg.chunklet);
 				  	fseek(readF, position, SEEK_SET);
+
+				  	if (respond.chunklet + 1 == respond.chunkletTotal){
+				  		if (respond.chunk + 1 != respond.chunkTotal){
+				  			chunkletSize = chunkSize * (recvMsg.chunk + 1) - position;
+				  		}
+
+				  	}
 
 				  	int currentSizes = chunkletSize;
 				  	char results[1024];
@@ -163,14 +178,17 @@ int main(int argc, char* argv[]){
 				  	int sent = sendto(sockfd, (const struct Message*)&respond, sizeof(respond), MSG_CONFIRM, (const struct sockaddr *)&cliaddr, len);
   					if(sent < 0){
   						fprintf(stderr, "Error: Failed to send Confirmation\n");
-    					return -1;
+  						close (sockfd);
+    					exit(1);
   					}
 
 				}
+				// Recieved undefined request
 				else{
 					printf ("Undefined Type: %s\n", recvMsg.type);
 				}
-				return 0;
+				close (sockfd);
+				exit(0);
 			}
 			else continue;
 		}	

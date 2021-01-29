@@ -1,0 +1,86 @@
+Name: Trystan Nguyen 
+ID: tratanguy@ucsc.edu 1579170
+
+Message Protocol:
+	In this protocol, the client will be responsible for handling errors and maintaining connections to the server. The server will respond to the best of its ability, but will not make strong decision against client request.
+
+	Message format:
+		struct Message{
+		    char type[10];
+		    int chunk;
+		    int chunkTotal;
+		    int chunklet;
+		    int chunkletTotal;
+		    int length;
+		    char data[1024];
+		};
+		Each field's value will depend on the message type.
+
+	Field Calculations:
+		filesize = number of characters in the file
+		chunkTotal = supplied by command line arguement
+		chunkSize = (filesize / ChunkTotal) rounded up
+		chunkletTotal = (chunkSize / 1024) rounded up
+		if not the last chunklet
+			chunkletSize = (chunksize / chunkletTotal) rounded up 
+		otherwise
+			chunkletSize = chunkSize * (chunk + 1) - (chunkSize * chunk + chunkletSize * chunklet)
+
+
+	Client messages:
+		Fields Stated are required to be filled out
+
+		Type "Check":
+			data = name of file desired in path
+			--Expected Messages from Server: "Yes" or "No"
+
+		Type "Request":
+			chunk = the chunk requested (Starting from 0)
+			chunkTotal = the total number of chunks
+			chunklet = the subchunk requested (Starting from 0)
+			chunkletTotal = the total number of chunk
+			length = size of file requested
+			-- Expected Message from Server: "Chunk"
+
+
+	Server messages:
+		Fields Stated are required to be filled out
+
+		Type: "Yes"
+			length = filesize
+			-- Sent when "Check" is recieved and file exists
+
+		Type: "No"
+			-- Sent when "Check" is recieved and file doesn't exists
+
+		Type "Chunk"
+			chunk = the chunk sent (Starting from 0)
+			chunkTotal = the total number of chunks
+			chunklet = the subchunk sent (Starting from 0)
+			chunkletTotal = the total number of chunk
+			length = size of file requested
+				-- The prior 5 fields will be the same as the "Request" message recieved
+			data = piece of data requested
+			-- Sent when "Request" is recieved
+
+
+	Client Duties:
+		1. Client will send "Check" messages to each server and keep a list of all the servers that are open and contain the file. The client must make sure to have unique IP / Port combinations. If no servers are avaliable, the client will terminate. If the client recieves "Yes" messages will different file sizes, the client will terminate.
+		2. For each chunk requested, a server will be assigned to retrieve it. If the number of Chunks is greater than the number of servers, multiple servers will retrieve more than one chunk. If chunk sizes are too big, the client will request chunklets (fraction of chunks) multiple times to create a chunk. The client will be sending "Request" messages and expect "Chunk" messages from the servers. The Client will keep track of the data when retrieving messages using the chunk and chunklet fields.
+		3. When the client hasn't recieved any messages and still has chunks or chunklets missing, deadlock will occur where after a certain amount of times, the client will swap all chunk's respective server. If all servers don't send "Chunk" when client sends "Request", the client will terminate.
+		4. If all chunks are recieved, the Client will build the file in the same directory.
+
+		Expectations:
+		- The client will only send "Request" messages if a "Check" message has been sent and a "Yes" had been recieved prior.
+		- The client will use the same calculations as the server defined in this document for message fields.
+		- The client is expected to handle any error dealing with getting the file and building it. 
+
+	Server Duties:
+		1. Upon recieving a packet, the server will call fork. The parent process will continue listening for packets.
+		2. The child process will open the packet and determine the appropriate response.
+			A. If "Check" is recieved, the server will check if the file exist. If is doesnt, then "No" message will be sent. Otherwise, the server will count the number of characters in the file and send a "Yes" message back.
+			B. If "Request" is sent, Server will use the fields of "Request" to determine the string to return in "Chunk"
+
+		Expectations:
+		- The server will use the same calculations as the client defined in this document for message fields
+		

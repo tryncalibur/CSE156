@@ -1,0 +1,26 @@
+Name: Trystan Nguyen 
+ID: tratanguy@ucsc.edu 1579170
+
+Design Overview:
+When myclient is executed, it will go through each server on a list and determine whether it has the specified file. Then, myclient will request chunks of the file through each server until it creates the full file. 
+
+
+
+myclient:
+When compiled, this application will be built in bin/
+When myclient is executed, it will first check the command line arguements: if <server-info.txt> exits and <num-chunk> is a real integer greater that 0. Then, for each server in <server-info.txt>, the server ip and port will be checked if they exist, if they are repeated previously, and if the server has <filename-path>. If all prerequistes have been satisfied, that server would be put on a list. After all servers have been examined, if none of servers fit the prerequisites, the client will end. Additionally, if the filesize is 0, the client will simply create an empty file and terminate.
+Otherwise, myclient well begin sending requests to all servers on the list. After a server returns a completed chunk, it will be given a new chunk to retrieve if possible. If no servers have responded for some time, every server will be pinged again for their data. If this repeats for enough time, myclient will rotate the servers avalailible around the list to get different chunks. This is done so if a server ends, but another doesn't, the running server will finish their chunk and will recieve a dead server's chunk after that period of time. After a full rotation of servers, if none have responded back, the client will terminate, failing to get the file. 
+If all chunks requested have been delivered, myclient will assemble the file and terminate. The file will be built in the same directory as myclient.
+
+-- Issues:
+The method in which myclient detects dead servers is not instantaneous and does not gurantee the next server used won't also be dead. This methods relies on the fact that if a server dies, the process of recievubg chunk pieces will be halted, but still tied to the dead server. The chunk won't be updated until all other chunk's whose servers work are delivered. Then, deadlock will take place which will rotate the active chunk list such that the chunk with the dead server will recieve a new server to get chunks from. This rotation will keep happening until a chunk is recieved or if all servers have been tested.
+
+
+myserver:
+When compiled, this application will be built in bin/Server/
+When myserver is executed, it will check command line arguement to get which port number to listen to. Then, it will begin a loop which will fork whenever it recieves a packet on said port. The parent processes will simply continue the loop. The child process will dissect the packet and send a packet back to the sender. The content of the packet will depend on the the type of request recieved which is detailed in DesignDocument. 
+
+
+-- Issues:
+If myserver recieves an excessive amount of messages, the program will be unable to create child processes and no longer recieve and send messages. EX: Running 2 clients requesting file6 in 1 chunk 2 two times back to back. I believe this occurs when child processes don't terminate as quickly as they are created, causing the program to run out of space. 
+When myserver sends a packet for a request of a chunk, 

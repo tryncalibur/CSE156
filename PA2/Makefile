@@ -11,7 +11,7 @@ myclient.o :
 	gcc -c -std=c99 -Wall ./src/myclient.c -lm
 
 myserver : myserver.o
-	gcc -o ./bin/myserver ./myserver.o -lm
+	gcc -o ./bin/Server/myserver ./myserver.o -lm
 
 myserver.o : 
 	gcc -c -std=c99 -Wall ./src/myserver.c -lm

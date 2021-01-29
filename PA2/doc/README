@@ -1,0 +1,23 @@
+Name: Trystan Nguyen 
+ID: tratanguy@ucsc.edu 1579170
+
+Files:
+	myclient.c
+		Compiles into a program that takes the servers ips and ports of the 1st parameter and requests to download the 3rd parameter in a number of chunks equal to the 2nd parameter.
+
+	myserver.c
+		Compiles into a program that constantly watches the port supplied in the 1st parameter and will respond to inqueries of supported protocol.
+
+	myclient
+		Usage: ./myclient <server-info.txt> <num-chunks> <filename-path>
+		Executable file that follows the protocol specified in Documentation to request servers from the 1st parameter to download the file named in the 3rd directory in a number of chunks equal to 2nd parameter.
+
+	myserver
+		Usage: ./myserver <port-number>
+		Executable file that follows the protocols specified in Documentation to send data corresponding to the protocol and recieved data packet.
+
+	Documentation
+		Defines the protocol used by both myclient and myserver to exchange packets in order to achieve said program's objective.
+
+	Makefile
+		Compiles and create an excutable files myclient in the bin directory and myserver in bin/Server directory.
