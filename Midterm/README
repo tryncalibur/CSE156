@@ -1,0 +1,9 @@
+Trystan Nguyen
+
+
+myclient.c
+myserver.c
+MakeFile
+
+
+THe client will initiate connections with the server and proceed to send over the files, expecting an echo immediately. the server will recieve the files, write, and send back
