@@ -5,16 +5,16 @@
 all : myclient myserver rm
 
 myclient : myclient.o
-	gcc -o ./myclient ./myclient.o -lm
+	gcc -o ./myclient ./myclient.o -lreadline
 
 myclient.o : 
-	gcc -c -std=c99 -Wall ./myclient.c -lm
+	gcc -c -std=c99 -Wall ./myclient.c -lreadline
 
 myserver : myserver.o
-	gcc -o ./Server/myserver ./myserver.o -lm
+	gcc -o ./Server/myserver ./myserver.o -lreadline
 
 myserver.o : 
-	gcc -c -std=c99 -Wall ./myserver.c -lm
+	gcc -c -std=c99 -Wall ./myserver.c -lreadline
 
 clean :
 	rm -f myserver.o myclient.o myclient ./Server/myserver

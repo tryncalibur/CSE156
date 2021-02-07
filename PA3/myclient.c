@@ -6,15 +6,12 @@
 #include <sys/socket.h>
 #include <arpa/inet.h>
 #include <netinet/in.h>
-#include <sys/select.h>
-#include <sys/time.h>
-#include <math.h>
 #include <errno.h>
 #include <readline/readline.h>
 #include <readline/history.h>
 
 int main(int argc, char **argv){
-	if (argc == 3){
+	if (argc == 2){
 		fprintf(stderr, "Usage: myclient <IP> <Port>\n");
    	 	exit(1);
 	}
@@ -57,9 +54,15 @@ int main(int argc, char **argv){
   
   	// Send line from terminal
   	char* sendbuffer = NULL;
-	while(true){
-		if (readline(sendbuffer) == NULL) continue;
-		int sendData = send(listen_fd, sendbuffer, strlen(sendbuffer), 0)
+	while(1){
+		sendbuffer = readline("client $ ");
+		if (!sendbuffer) continue;
+		if (strlen(sendbuffer) > 1024){
+			fprintf(stderr, "Error: Command too long. Max size = 1024\n");
+		}
+		char resize[1024];
+		strcpy(resize, sendbuffer);
+		int sendData = send(listen_fd, resize, sizeof(resize), 0);
 		if(sendData < 0){
 			fprintf(stderr, "Error: Failed to send\n");
 			close (listen_fd);

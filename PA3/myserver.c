@@ -6,9 +6,6 @@
 #include <sys/socket.h>
 #include <arpa/inet.h>
 #include <netinet/in.h>
-#include <sys/select.h>
-#include <sys/time.h>
-#include <math.h>
 #include <errno.h>
 
 int main(int argc, char **argv){
@@ -45,37 +42,49 @@ int main(int argc, char **argv){
 
 	// Listen for clients
 	int comm_fd, pid;
-	while(true){
+	int status = 0;
+	int counter = 0;
+	while(1){
 		comm_fd = accept(listen_fd, (struct sockaddr*) NULL, NULL);
 		pid = fork();
 
 		// Create Child process to deal with new client request
 		if (pid == 0){
-			printf ("Create Child\n");
 			close(listen_fd);
 
 
 			// Stay open until client terminates connection
 			char recvbuffer[1024];
-			while(true){
+			while(1){
 				memset(recvbuffer, 0, sizeof(recvbuffer));
-				int recvData = recv(comm_fd, recvbuffer, 1023, 0);
+				int recvData = recv(comm_fd, recvbuffer, 1024, 0);
 				if(recvData < 0){
 					fprintf(stderr, "Error: Failed to recieve\n");
 					close (comm_fd);
 					exit(1);
 				}
-				if (recvData > 1024){
-					fprintf(stderr, "Error: Buffer overflow. Expected max line size of 1024\n");
-					continue;
+
+				printf ("Recieved: %s\nSize: %d\n\n", recvbuffer, strlen(recvbuffer));
+
+				// Check Message content to see client health
+				if (strlen(recvbuffer) == 0){
+					if (status == 1) ++counter;
+					status = 1;
 				}
-				
-				printf ("Recieved: %s\n", recvbuffer);
-				if (strcmp(recvbuffer, "Exit") == 0) break;
+				else{
+					counter = 0;
+					status = 0;
+				}
+				if (counter > 10) break;
+				if (strcmp(recvbuffer, "exit") == 0) break;
+
+
+
 			}
 
 
 			close(comm_fd);
+			printf("Terminate\n");
 			exit(0);
 		}
 
@@ -84,5 +93,5 @@ int main(int argc, char **argv){
 		close(comm_fd);
 	}
 
-
+	close(listen_fd);
 }
