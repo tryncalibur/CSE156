@@ -1,0 +1,23 @@
+Trystan Nguyen trtanguy@ucsc.edu
+1579170
+Programming Assignment 3: Simple Remote Server
+
+src/myclient.c
+	Source file used to create myclient in Makefile
+
+src/myserver.c
+	Source file used to create myserver in Makefile
+
+bin/myclient
+	Usage: ./myclient <ip> <port>
+	Executable file that will connect with server on <ip> <port> if availiable and will take stdin and send it to server, which will then print the server's response
+	- Uses Readline
+	Known Issues: 
+	   - Does not accept input greater than 1024 chars from stdin
+	   - Does not clear Readline History
+
+bin/myserver
+	Usage: ./myserver <port>
+	Executable file that will create a child process upon recieving a connection from a client and execute commands recieved and send the response back to server.
+	Known Issues:
+	   - Recieving a command that results in a line "EOF-/" that isn't at the end of terminal stream will cause the server to stop sending data early.

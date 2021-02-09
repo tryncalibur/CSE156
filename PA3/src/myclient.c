@@ -62,17 +62,47 @@ int main(int argc, char **argv){
 		}
 		char resize[1024];
 		strcpy(resize, sendbuffer);
-		int sendData = send(listen_fd, resize, sizeof(resize), 0);
+		int sendData = send(listen_fd, resize, 1024, 0);
 		if(sendData < 0){
 			fprintf(stderr, "Error: Failed to send\n");
 			close (listen_fd);
 			free(sendbuffer);
 			exit(1);
 		}
+		if (strcmp(sendbuffer, "exit") == 0) {
+			free(sendbuffer);
+			break;
+		}
 
 		free(sendbuffer);
 		sendbuffer = NULL;
+
+		while(1){
+			int end = 0;
+			char buffer[1024];
+			memset(buffer, 0, 1024);
+			int recvData = recv(listen_fd, buffer, 1024, 0);
+			if(recvData < 0){
+				fprintf(stderr, "Error: Failed to recieve\n");
+				close (listen_fd);
+				exit(1);
+			}
+			if (strcmp(buffer, "EOF-/") == 0) ++end;
+			else printf("%s", buffer);
+
+			memset(buffer, 0, 1024);
+			if (end == 1) strcpy(buffer, "FinalAck");
+			else strcpy(buffer, "Ack");
+			int sentData = send(listen_fd, buffer, 1024, 0);
+			if(sentData < 0){
+				fprintf(stderr, "Error: Failed to recieve\n");
+				close (listen_fd);
+				exit(1);
+			}
+			if (end == 1) break;
+		}
 	}
 
 	close (listen_fd);
+	clear_history();
 }

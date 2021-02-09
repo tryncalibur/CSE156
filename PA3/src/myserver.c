@@ -56,15 +56,13 @@ int main(int argc, char **argv){
 			// Stay open until client terminates connection
 			char recvbuffer[1024];
 			while(1){
-				memset(recvbuffer, 0, sizeof(recvbuffer));
+				memset(recvbuffer, 0, 1024);
 				int recvData = recv(comm_fd, recvbuffer, 1024, 0);
 				if(recvData < 0){
 					fprintf(stderr, "Error: Failed to recieve\n");
 					close (comm_fd);
 					exit(1);
 				}
-
-				printf ("Recieved: %s\nSize: %d\n\n", recvbuffer, strlen(recvbuffer));
 
 				// Check Message content to see client health
 				if (strlen(recvbuffer) == 0){
@@ -78,13 +76,78 @@ int main(int argc, char **argv){
 				if (counter > 10) break;
 				if (strcmp(recvbuffer, "exit") == 0) break;
 
+				// Do command
+				strcat(recvbuffer, " 2>&1");
+				FILE* terminal = popen(recvbuffer, "r");
+				if (terminal == NULL){
+					fprintf(stderr, "Error: Failed to open terminal\n");
+					close (comm_fd);
+					exit(1);
+				}
 
+				// Get Data
+				char line[1024];
+				memset(line, 0, 1024);
+				int numLines = 0;
+				while(fgets(line, sizeof(line), terminal) != NULL){
+					++numLines;
+				}
+				++numLines;
+
+				// Reset terminal
+				if (pclose(terminal) == -1){
+					fprintf(stderr, "Error: Failed to close terminal\n");
+					close (comm_fd);
+					exit(1);
+				}
+				terminal = popen(recvbuffer, "r");
+				if (terminal == NULL){
+					fprintf(stderr, "Error: Failed to open terminal\n");
+					close (comm_fd);
+					exit(1);
+				}
+
+
+				char sendBuffer[numLines][1024];
+				memset(sendBuffer, 0, sizeof(sendBuffer[0])*numLines);
+				int currentPos = 0;
+				while(fgets(line, sizeof(line), terminal) != NULL){
+					strcpy(sendBuffer[currentPos++], line);
+				}
+				strcpy(sendBuffer[numLines-1], "EOF-/");
+
+
+				if (pclose(terminal) == -1){
+					fprintf(stderr, "Error: Failed to close terminal\n");
+					close (comm_fd);
+					exit(1);
+				}
+
+
+				// Send Data
+				for(int i = 0; i < numLines; ++i){
+					//printf ("Sent %s\n", sendBuffer[i]);
+					int sent = send(comm_fd, sendBuffer[i], 1024, 0);
+					if (sent < 0){
+						fprintf(stderr, "Error: Failed to send data\n");
+						close (comm_fd);
+						exit(1);
+					}
+
+					memset(recvbuffer, 0, 1024);
+					recvData = recv(comm_fd, recvbuffer, 1024, 0);
+					if(recvData < 0){
+						fprintf(stderr, "Error: Failed to recieve\n");
+						close (comm_fd);
+						exit(1);
+					}
+					if (strcmp(recvbuffer, "FinalAck") == 0) break;
+				}
 
 			}
 
 
 			close(comm_fd);
-			printf("Terminate\n");
 			exit(0);
 		}
 

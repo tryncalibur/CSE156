@@ -1,0 +1,33 @@
+Design Document
+
+myserver:
+Process:	
+	Upon recieving a connection, myserver will create a child process dedicated to handling messages from the specified client. This child process will wait to recieved message. 
+	Once the server recieves a message, it will concatenate it with " 2>&1" and use it as the prompt for for popen(). The server will then count the number of lines within the response and create an array of data with the last element being "EOF-/". 
+	For each element in the data array, the server will send a piece of the data and expects a response from the client afterwards in order to proceed to the next piece of data. Once "EOF-/"" has been acknowledged, myserver will wait for the next message request.
+
+Error handling:
+	If the server is unable to send or recieve messages, fork, or use popen or pclose, it will close the child process and terminate connection with that client.
+	If the client terminates abruptly, the server will recieve 10 size 0 messages before terminating connections
+
+Program Expectactions:
+	1. Server will create a child process to handle connections with new clients
+	2. Server will recieve commands in the correct format from the client
+	3. Server will send data created from commands back to the client in segments of 1024
+	4. For each data segment sent, the server expects an acknowledgement from client
+	5. The last data segment sent will be "EOF-/"
+
+
+myclient:
+Process:
+	When a connection is made with a server, the readline function will block until input has been recieved from stdin. It will send that input to the server and wait for a response. For each response recieved, the client acknowledge it. Once the client recieves "EOF-/", it will send its last acknowledgement and look for input again using readline.
+
+Error handling:
+	If the client is unable to send or recieve messages, readline is unable to allocate memory, the client will terminate itself
+
+Program Expectactions:
+	1. After a successful connection, the client will wait for readline to recieve input of maximus size 1024
+	2. Commands created are formatted correctly
+	3. Client will send input from readline to server
+	4. Client will continuously recieve data segments and send acknowledgements until data segement "EOF-/" is recieved
+	5. Client will send final acknowledgement and will wait for next readline prompt
