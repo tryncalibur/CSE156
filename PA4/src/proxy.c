@@ -327,14 +327,17 @@ struct ServerRes handleConnect(int client_fd, int server_fd, char* clientbuffer)
 	// Check data Transfers
 	fd_set fds;
 	FD_ZERO(&fds);
+	FD_SET(client_fd, &fds);
+	FD_SET(server_fd, &fds);
+	fd_set test_fds;
 
 	int res = 0;
 	int bytesRead = 0;
 	int counterEnd = 0;
 
 	while(res >= 0){
-		FD_SET(client_fd, &fds);
-		FD_SET(server_fd, &fds);
+		FD_ZERO(&test_fds);
+		test_fds = fds;
 		res = input_timeout(fds, 15);
 
 		// Data recieved
@@ -412,7 +415,7 @@ struct ServerRes handleConnect(int client_fd, int server_fd, char* clientbuffer)
 	}
 	
 	rere.bytes = bytesRead;
-	rere.code = 200;
+	rere.code = 200;;
 	return rere;
 }
 
@@ -431,6 +434,7 @@ void* handleRequest(void* fd){
 		close(sock);
 		return NULL;
 	}
+	printf("%s\n", buffer);
 
 	// Set to -1 if request format is wrong
 	// Set to -2 if unimplemented command
@@ -441,7 +445,8 @@ void* handleRequest(void* fd){
 	char requestLine[1024];
 	memset(requestLine, 0, sizeof(requestLine));
 	char* endline = strchr(buffer, '\r');
-	strncpy(requestLine, buffer, endline-buffer);
+	if (endline == NULL) status = -1;
+	else strncpy(requestLine, buffer, endline-buffer);
 
 	// Get Host
 	char hostAr[256];
@@ -508,7 +513,13 @@ void* handleRequest(void* fd){
 	struct hostent* hostData= gethostbyname_ts(hostAr);
 	if(hostData == NULL){
 		fprintf(stderr, "Error: gethostbyname failed to return successfully\n");
-		if (status == 0)status = -1;
+		char* methodRejected = "HTTP/1.1 400 Bad Request\r\nContent-Length: 0\r\n\r\n";
+		if (send(sock, methodRejected, strlen(methodRejected), 0) <= 0) {
+			fprintf(stderr, "ERROR: Send to host server failed\n");
+		}
+		logEntry(tdata->cIP, requestLine, hostAr, 400, 0);
+		close(sock);
+		return NULL;
 	}
 	// Get Server IP
 	else{
@@ -600,8 +611,110 @@ void* handleRequest(void* fd){
 
 
 		// Maintain Connections
-		
-		
+		fd_set fds;
+		FD_ZERO(&fds);
+		FD_SET(sock, &fds);
+		FD_SET(host_fd, &fds);
+		fd_set test_fds;
+
+		int res = 0;
+		int countToEnd = 0;
+		while(status == 0 && res >= 0){
+			FD_ZERO(&test_fds);
+			test_fds = fds;
+			sleep(1);
+			res = input_timeout(test_fds, 180);
+
+			// Data Caught
+			if (res > 0){
+				// Data Recieved from Client
+				if (FD_ISSET(sock, &test_fds)){
+					// Recieve Data from client
+					int count;
+					ioctl(sock, FIONREAD, &count);
+
+					if (count != 0){
+						countToEnd = 0;
+						// Get data
+						memset(buffer, 0 ,sizeof(buffer));
+						recvReq = recv(sock, buffer, sizeof(buffer), 0);
+						if (recvReq < 0){
+							fprintf(stderr, "Error: Recv Failed from client\n");
+							close(host_fd);
+							close(sock);
+							return NULL;
+						}
+
+						// Get RequestLine
+						memset(requestLine, 0, sizeof(requestLine));
+						endline = strchr(buffer, '\r');
+						strncpy(requestLine, buffer, endline-buffer);
+
+						if (status == 0 && memcmp("GET ", buffer, 4) == 0){
+							struct ServerRes get = handleGet(sock, host_fd, buffer);
+							if (get.code == -1 && get.bytes == -1){
+								close(sock);
+								close(host_fd);
+								return NULL;
+							}
+
+							// Log Entry
+							logEntry(tdata->cIP, requestLine, hostAr, get.code, get.bytes);
+						}
+						else if (memcmp("CONNECT ", buffer, 8) == 0){
+							if (status == 0){
+								struct ServerRes con = handleConnect(sock, host_fd, buffer); 
+								if (con.code == -1 && con.bytes == -1){
+									close(sock);
+									close(host_fd);
+									return NULL;
+								}
+
+								// Log Entry
+								logEntry(tdata->cIP, requestLine, hostAr, con.code, con.bytes);
+							}
+							else{
+								char* methodRejected = "HTTP/1.1 400 Bad Request\r\nContent-Length: 0\r\n\r\n";
+								if (send(sock, methodRejected, strlen(methodRejected), 0) <= 0) {
+									fprintf(stderr, "ERROR: Send to host server failed\n");
+								}
+								logEntry(tdata->cIP, requestLine, hostAr, 400, 0);
+								close(sock);
+								return NULL;
+							}
+						}
+						// Unimplemented Method
+						else if (status == 0 ){
+							char* methodRejected = "HTTP/1.1 405 Method Not Allowed\r\nContent-Length: 0\r\n\r\n";
+				            if (send(sock, methodRejected, strlen(methodRejected), 0) <= 0) {
+								fprintf(stderr, "ERROR: Send to host server failed\n");
+								close(sock);
+								close(host_fd);
+								return NULL;
+							}
+
+							// Log Entry
+							logEntry(tdata->cIP, requestLine, hostAr, 405, 0);
+						}
+
+					}
+					else ++countToEnd;
+				}
+			}
+			// Timeout
+			else if (res == 0){
+				break;
+			}
+			// Select Error
+			else{
+				fprintf(stderr, "ERROR: Select() failed in thread\n");
+				close(host_fd);
+				close(sock);
+				return NULL;
+			}
+
+			if (countToEnd >= 60) break;
+		}
 
 		close(host_fd);
 	}
@@ -610,11 +723,11 @@ void* handleRequest(void* fd){
 	if (status != 0) {
 		char* methodRejected = NULL;
 		int badCode = 0;
-		if (status == -1){
+		if ((int)status == -1){
 			methodRejected = "HTTP/1.1 400 Bad Request\r\nContent-Length: 0\r\n\r\n";
 			badCode = 400;
 		}
-		if (status == -3){
+		if ((int)status == -3){
 			methodRejected = "HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\n\r\n";
 			badCode = 403;
 		}
@@ -634,7 +747,6 @@ void* handleRequest(void* fd){
 		// Log Entry
 		logEntry(tdata->cIP, requestLine, hostAr, badCode, 0);
 	}
-
 	close(sock);
 	return NULL;
 }
