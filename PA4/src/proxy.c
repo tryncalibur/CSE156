@@ -11,6 +11,7 @@
 #include <sys/time.h>
 #include <pthread.h>
 #include <netdb.h> 
+#include <sys/ioctl.h>
 
 // Global Scope
 pthread_mutex_t GET_HOST;
@@ -315,21 +316,103 @@ struct ServerRes handleConnect(int client_fd, int server_fd, char* clientbuffer)
 	struct ServerRes rere;
 	rere.bytes = -1;
 	rere.code = -1;
-	if (send(server_fd, clientbuffer, strlen(clientbuffer), 0) <= 0) {
-		fprintf(stderr, "ERROR: Send to host server failed\n");
+
+	// Send OK
+	char* accepted = "HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n";
+    if (send(client_fd, accepted, strlen(accepted), 0) <= 0) {
+		fprintf(stderr, "ERROR: Send to Client failed\n");
+		return rere;
 	}
-	printf ("%s\n\n\n", clientbuffer);
-	
-	char recvbuffer[1024];
-	while(1){
-		memset(recvbuffer, 0, sizeof(recvbuffer));
-		int inByte = recv(server_fd, recvbuffer, sizeof(recvbuffer), 0);
-		if (inByte <= 0){
-			fprintf(stderr, "ERROR: Recieve failed\n");	
-			break;	
+
+	// Check data Transfers
+	fd_set fds;
+	FD_ZERO(&fds);
+
+	int res = 0;
+	int bytesRead = 0;
+	int counterEnd = 0;
+
+	while(res >= 0){
+		FD_SET(client_fd, &fds);
+		FD_SET(server_fd, &fds);
+		res = input_timeout(fds, 15);
+
+		// Data recieved
+		if (res > 0){
+			//Recieve from Client
+			if (FD_ISSET(client_fd, &fds) != 0){
+				int count;
+				ioctl(client_fd, FIONREAD, &count);
+				if (count != 0){
+					counterEnd = 0;
+					char recvbuffer[1024];
+					memset(recvbuffer, 0, sizeof(recvbuffer));
+
+					// Recieve Data
+					int inByte = recv(client_fd, recvbuffer, sizeof(recvbuffer), 0);
+					if (inByte <= 0){
+						fprintf(stderr, "ERROR: Recieve from client failed\n");
+						return rere;
+					}
+
+					// Send Data
+					recvbuffer[inByte] = '\0';
+					if (send(server_fd, recvbuffer, strlen(recvbuffer), 0) <= 0) {
+						fprintf(stderr, "ERROR: Send to host server failed\n");
+						return rere;
+					}
+				}
+				else{
+					++counterEnd;
+					if (counterEnd >= 25) break;
+				}
 			}
-		printf("---------\n%s\n\n\n",recvbuffer);
+			// Recieve from Server
+			if (FD_ISSET(server_fd, &fds) != 0){
+				int count;
+				ioctl(server_fd, FIONREAD, &count);
+				if (count != 0){
+					counterEnd = 0;
+					char recvbuffer[1024];
+					memset(recvbuffer, 0, sizeof(recvbuffer));
+
+					// Recieve Data
+					int inByte = recv(server_fd, recvbuffer, sizeof(recvbuffer), 0);
+					if (inByte <= 0){
+						fprintf(stderr, "ERROR: Recieve from server failed\n");
+						return rere;
+					}
+
+					bytesRead += inByte;
+
+					// Send Data
+					recvbuffer[inByte] = '\0';
+					if (send(client_fd, recvbuffer, strlen(recvbuffer), 0) <= 0) {
+						fprintf(stderr, "ERROR: Send to client failed\n");
+						return rere;
+					}
+				}
+			}
+			else{
+				++counterEnd;
+				if (counterEnd >= 25) break;
+			}
+		}
+
+		// Time out
+		if (res == 0){
+			break;
+		}
+
+		// Select error
+		if (res < 0){
+			fprintf(stderr, "ERROR: Select failed in handleConnect()\n");
+			return rere;
+		}
 	}
+	
+	rere.bytes = bytesRead;
+	rere.code = 200;
 	return rere;
 }
 
@@ -421,19 +504,24 @@ void* handleRequest(void* fd){
 
 	//-----------------------------------------------------------------------------
 	// Get Host
+	char serverIP[256];
 	struct hostent* hostData= gethostbyname_ts(hostAr);
 	if(hostData == NULL){
 		fprintf(stderr, "Error: gethostbyname failed to return successfully\n");
-		status = -1;
+		if (status == 0)status = -1;
+	}
+	// Get Server IP
+	else{
+		struct in_addr **addr_list = (struct in_addr **) hostData->h_addr_list;
+		strcpy(serverIP , inet_ntoa(*addr_list[0]));
+		free(hostData);
+	}
+	if(strcmp(serverIP, tdata->cIP) == 0){
+		if (status == 0) status = -1;
 	}
 
 	// Do Request if valid
 	if (status == 0){
-		// Get Server IP
-		char serverIP[256];
-		struct in_addr **addr_list = (struct in_addr **) hostData->h_addr_list;
-		strcpy(serverIP , inet_ntoa(*addr_list[0]));
-		free(hostData);
 
 		// Setup Socket connections
 		struct sockaddr_in hostserv;
@@ -451,21 +539,19 @@ void* handleRequest(void* fd){
 		int inetCheck = inet_pton(AF_INET, serverIP, &hostserv.sin_addr);
 			if (inetCheck <= 0){
 			fprintf(stderr, "ERROR: Invalid address\n");
-			close(sock);
 			close(host_fd);
-			return NULL;
+			if (status == 0) status = -1;
 		}
 
-		if (connect(host_fd, (struct sockaddr*)&hostserv, sizeof(hostserv)) < 0){
+		if (status == 0 && connect(host_fd, (struct sockaddr*)&hostserv, sizeof(hostserv)) < 0){
 			fprintf(stderr, "ERROR: Connection Failed\n");
 			fprintf(stderr, "\t%s\n", strerror(errno));
-			close(sock);
 			close(host_fd);
-			return NULL;
+			if (status == 0) status = -1;
 		}
 
 		// Do something First time
-		if (memcmp("GET ", buffer, 4) == 0){
+		if (status == 0 && memcmp("GET ", buffer, 4) == 0){
 			struct ServerRes get = handleGet(sock, host_fd, buffer);
 			if (get.code == -1 && get.bytes == -1){
 				close(sock);
@@ -477,18 +563,29 @@ void* handleRequest(void* fd){
 			logEntry(tdata->cIP, requestLine, hostAr, get.code, get.bytes);
 		}
 		else if (memcmp("CONNECT ", buffer, 8) == 0){
-			struct ServerRes con = handleConnect(sock, host_fd, buffer); 
-			if (con.code == -1 && con.bytes == -1){
+			if (status == 0){
+				struct ServerRes con = handleConnect(sock, host_fd, buffer); 
+				if (con.code == -1 && con.bytes == -1){
+					close(sock);
+					close(host_fd);
+					return NULL;
+				}
+
+				// Log Entry
+				logEntry(tdata->cIP, requestLine, hostAr, con.code, con.bytes);
+			}
+			else{
+				char* methodRejected = "HTTP/1.1 400 Bad Request\r\nContent-Length: 0\r\n\r\n";
+				if (send(sock, methodRejected, strlen(methodRejected), 0) <= 0) {
+					fprintf(stderr, "ERROR: Send to host server failed\n");
+				}
+				logEntry(tdata->cIP, requestLine, hostAr, 400, 0);
 				close(sock);
-				close(host_fd);
 				return NULL;
 			}
-
-			// Log Entry
-			logEntry(tdata->cIP, requestLine, hostAr, con.code, con.bytes);
 		}
 		// Unimplemented Method
-		else{
+		else if (status == 0 ){
 			char* methodRejected = "HTTP/1.1 405 Method Not Allowed\r\nContent-Length: 0\r\n\r\n";
             if (send(sock, methodRejected, strlen(methodRejected), 0) <= 0) {
 				fprintf(stderr, "ERROR: Send to host server failed\n");
@@ -503,96 +600,14 @@ void* handleRequest(void* fd){
 
 
 		// Maintain Connections
-		int res = 0;
-		fd_set list;
-		FD_ZERO(&list);
-		FD_SET(sock, &list);
-		FD_SET(host_fd, &list);
-
-		// Check for Sent data
-    	while(res >=0){
-    		res = input_timeout(list, 300);
-    		if (res > 0){
-    			if (FD_ISSET(sock, &list)){
-    				memset (buffer, 0, sizeof(buffer));
-				 	recvReq = recv(sock, buffer, sizeof(buffer), 0);
-					if (recvReq <= 0){
-						if (recvReq < 0) fprintf(stderr, "Error: Send Failed from client x2\n");
-						close(host_fd);
-						close(sock);
-						return NULL;
-					}
-					// Get RequestLine
-					memset(requestLine, 0, sizeof(requestLine));
-					endline = strchr(buffer, '\r');
-					strncpy(requestLine, buffer, endline-buffer);
-
-					// DO STUFF Repeat
-					// Check Request CONN
-					if (memcmp("GET ", buffer, 4) == 0){
-						struct ServerRes get = handleGet(sock, host_fd, buffer);
-						if (get.code == -1 && get.bytes == -1){
-							close(sock);
-							close(host_fd);
-							return NULL;
-						}
-
-						// Log Entry
-						logEntry(tdata->cIP, requestLine, hostAr, get.code, get.bytes);
-					}
-					else if (memcmp("CONNECT ", buffer, 8) == 0){
-						struct ServerRes con = handleConnect(sock, host_fd, buffer); 
-						if (con.code == -1 && con.bytes == -1){
-							close(sock);
-							close(host_fd);
-							return NULL;
-						}
-
-						// Log Entry
-						logEntry(tdata->cIP, requestLine, hostAr, con.code, con.bytes);
-					}
-					// Unimplemented Method
-					else{
-						char* methodRejected = "HTTP/1.1 405 Method Not Allowed\r\nContent-Length: 0\r\n\r\n";
-			            if (send(sock, methodRejected, strlen(methodRejected), 0) <= 0) {
-							fprintf(stderr, "ERROR: Send to host server failed\n");
-							close(sock);
-							close(host_fd);
-							return NULL;
-						}
-
-						// Log Entry
-						logEntry(tdata->cIP, requestLine, hostAr, 405, 0);
-					} 
-					
-    			}
-    			else{
-    				memset (buffer, 0, sizeof(buffer));
-				 	recvReq = recv(host_fd, buffer, sizeof(buffer), 0);
-
-				 	// Server initiated Shutdown
-				 	if (recvReq <= 0){
-						close(host_fd);
-						close(sock);
-						return NULL;
-					}
-    			}
-    		}
-    		// Timeout
-    		else{
-				fprintf(stderr, "Error: Client / Server Timout\n");
-				close(host_fd);
-				close(sock);
-				return NULL;
-    		}
-    	}
+		
 		
 
 		close(host_fd);
 	}
 
 	// Send error response to client
-	else {
+	if (status != 0) {
 		char* methodRejected = NULL;
 		int badCode = 0;
 		if (status == -1){
