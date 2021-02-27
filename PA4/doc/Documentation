@@ -1,0 +1,22 @@
+Proxy Server Protocol:
+
+	General Functionality
+		1. When the proxy is run, it will first check the command line arguements. If the port is not valid or the forbidden sites file does not exist, the proxy server will terminate.
+
+		2. The proxy server will then create a socket that will listen for requests that are sent to the given port. If this fails, the proxy server will terminate.
+
+		3. When the proxy server recieves a new connection, it will create a new thread to handle it. The main thread will continue to monitor for new connection requests.
+
+		4. When a new thread is created, it will recieve the data sent that created this thread. With this data, the thread will determine the protocol request, host server IP, and port. Then, the Connection and Proxy connection headers will be removed from this data. If the request and host is valid and connected, the client will do the request. Otherwise the thread will repond to the client with an appropriate response and terminate the thread.
+
+		5. Using the request protocol found in the first packet of data, the thread will determine how to handle the request.
+			a. If the request was GET, the thread will determine whether to use Content Length approach or Chunked-Encoding approach to recieve packets from the server and send them to the client.
+			b. If the request was CONNECT and the socket is connected, the proxy server will send a 200 Ok response to the client and freely listen to both the client and server, sending data between the two. If the thread detects 25 consecutive 0 byte reads from the client and server, it will determine that the exchange is over and finish.
+
+		6. If the first exchange was successful, the thread will maintain this connection, which will linearly accept requests from the client. If 1 minute passes without any request, the thread will terminate. 
+
+		7. If the first exchange failed and the reasons are known, the thread will send a reponse to the client appropriate to the reason why the request failed and the thread will terminate.
+
+	Conditional Functionality
+		- Whenever the proxy server responds to the Client successfully, the response will be logged in access.log in the following format:
+			<date-format> <client-ip> <request-line> <host> <http-status-code> <object-bytes>

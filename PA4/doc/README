@@ -1,0 +1,23 @@
+Trystan Nguyen 1579170
+trtanguy@ucsc.edu
+Lab04: Web Proxy
+
+Makefile: 
+	Creates executable binary proxy in the bin directory
+
+proxy.c
+	Source file used to create proxy
+
+proxy
+	Usage: ./proxy <listen-port> <forbidden-sites-file>
+	Executable binary used to listen to the given port and act as a proxy server. 
+
+	Known Issues:
+		- Does not work with HTTPS at all from what I have tested (mainly an issue with gethostbyname() returning NULL, same issue with getaddrinfo from what i've tested)
+		- Connection is maintained after first call for 60 seconds, but is not tested.
+		- Since recv return 0 on both server closing and reading 0 bytes, the connection request will check for reading size 0 for both server and client until 25 consecutive 0s have been read collectively from the two. Then the response will end.
+		- The proxy server can only handle correctly formatted http request. A nonformatted request will cause unexpected errors and may close the thread it created without responding back to the client.
+		- The proxy server will only log requests if the proxy server is capable of responding to the client.
+
+		-- Overall
+		- Works if requests are valid in terms of Host server being http and request format is correct

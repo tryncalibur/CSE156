@@ -434,7 +434,6 @@ void* handleRequest(void* fd){
 		close(sock);
 		return NULL;
 	}
-	printf("%s\n", buffer);
 
 	// Set to -1 if request format is wrong
 	// Set to -2 if unimplemented command
