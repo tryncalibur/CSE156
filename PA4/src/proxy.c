@@ -101,7 +101,7 @@ int logEntry(char* clientIP, char* request, char* host, int code, int size){
 	// Get Time
 	char currentTime[50];
 	memset(currentTime, 0, sizeof(currentTime));
-	sprintf(currentTime, "%d-%02d-%02dT%02d:%02d:%02dU", 
+	sprintf(currentTime, "%d-%02d-%02dT%02d:%02d:%02dZ", 
 		format.tm_year + 1900, format.tm_mon + 1, format.tm_mday, format.tm_hour, format.tm_min, format.tm_sec);
 
 	// Make String
