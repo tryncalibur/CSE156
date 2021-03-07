@@ -148,13 +148,13 @@ void* chatWrite(void* cData){
 			char sendbuffer[1300];
 			memset(sendbuffer, 0 , sizeof(sendbuffer));
 
-			if (checkMode == CHAT) sprintf(sendbuffer, "%s: %s\n", GlobalID, buffer);
-			else strcpy(sendbuffer, "END_COMM\n\n");
-
-			if (send(comm_fd, sendbuffer, strlen(sendbuffer), 0) < 0) {
-				fprintf(stderr, "ERROR: Failed to send to client\n");
-				close(comm_fd);
-	    	 	return NULL;
+			if(strlen(buffer) != 0){
+				if (checkMode == CHAT) sprintf(sendbuffer, "%s: %s\n", GlobalID, buffer);
+				if (send(comm_fd, sendbuffer, strlen(sendbuffer), 0) < 0) {
+					fprintf(stderr, "ERROR: Failed to send to client\n");
+					close(comm_fd);
+		    	 	return NULL;
+				}
 			}
 
 			if (checkMode == CHAT) write(STDOUT_FILENO, promptID, strlen(promptID));
@@ -184,7 +184,7 @@ void* waitWrite(void* v){
 		if (res > 0){
 			// Write ID and read input
 			memset(readTerminal, 0, sizeof(readTerminal));
-			if (checkMode) read(STDIN_FILENO, readTerminal, sizeof(readTerminal));
+			if (checkMode == WAIT) read(STDIN_FILENO, readTerminal, sizeof(readTerminal));
 
 			// Check command
 			readTerminal[strlen(readTerminal)-1] = '\0';
@@ -640,7 +640,7 @@ int main(int argc, char **argv){
 
 	// Determine if ID was declined
 	if (strcmp(buffer, "Bad ID\n\n") == 0){
-		fprintf(stderr, "ERROR: ID already in use\n");
+		fprintf(stderr, "Client ID is already taken\n");
 		close (listen_fd);
 		exit(1);
 	}

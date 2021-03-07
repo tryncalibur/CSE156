@@ -9,7 +9,7 @@ server
 	Usage: ./server <listen-port>
 	Executable binary used to listen to the given port and creates new threads to handle clients. This process will keep track of all clients that connect until they leave cleanly.
 
-	Memory leaks will occur if server is forcibly ended while connections still open
+	Memory leaks will occur if server is forcibly ended while connections are still open
 
 client.c
 	source file used to create client
@@ -27,7 +27,7 @@ client
 		/list: Prints list of client IDs on server searching for clients
 		/wait: Sends the server a message that client is looking for connections. Enters WAIT mode. If connection is made, enters CHAT mode.
 		/connect <ID>: Connects to ID if Client of ID is waiting for connections. Enters CHAT mode if successful.
-		/quit: Ends Connects with any client / server and terminates self. 
+		/quit: Ends connections with any client / server and terminates self from any mode. 
 		Ctrl + c: Ends Modes WAIT or CHAT, returns to listening to commands in INFO mode.
 
 

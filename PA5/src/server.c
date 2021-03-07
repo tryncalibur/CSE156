@@ -10,6 +10,7 @@
 #include <netinet/in.h>
 #include <errno.h>
 #include <pthread.h>
+#include <ctype.h>
 
 // Structs
 struct Node{ 
@@ -34,7 +35,6 @@ struct ThreadData{
 // GLOBAL SCOPE
 struct Node* LIST;
 pthread_mutex_t EDIT_LIST;
-pthread_mutex_t USE_SPRINTF;
 
 // Utility ----------------------------------------------------------------------------
 int input_timeout (int fd, unsigned int secs){
@@ -60,12 +60,9 @@ void insertNode(struct Node* add){
 			holdPrev = findEnd;
 			findEnd = findEnd->next;
 		}
-		printf ("%s && %s = %d\n", add->ID, findEnd->ID, strcmp(add->ID, findEnd->ID));
 		if (findEnd->next == NULL && strcmp(add->ID, findEnd->ID) > 0) findEnd->next = add;
 		else{
-			printf("CUSTOM--------\n");
 			if (holdPrev == NULL){
-				printf("HEAD\n");
 				LIST = add;
 				add->next = findEnd;
 			}
@@ -119,9 +116,26 @@ int freeNode(struct Node* cur){
 // Check for Repeat Names
 // 1 = Exist, 0 = Availible
 int checkListName(struct Node* l, char* name){
+	// Get Lowercase ver
+	char lowerCheck[256];
+	memset(lowerCheck, 0, sizeof(lowerCheck));
+	strcpy(lowerCheck, name);
+	for(int i = 0; lowerCheck[i]; ++i){
+		lowerCheck[i] = tolower(lowerCheck[i]);
+	}
+
+	// Read List
 	while(l != NULL){
-		if (strcmp(l->ID, name) == 0) {
-			pthread_mutex_unlock(&EDIT_LIST);
+		// Create LC ver of ID
+		char lc[256];
+		memset(lc, 0, sizeof(lc));
+		strcpy(lc, l->ID);
+		for(int i = 0; lc[i]; ++i){
+			lc[i] = tolower(lc[i]);
+		}
+
+		// Check if same
+		if (strcmp(lc, lowerCheck) == 0) {
 			return 1;
 		}
 
@@ -138,15 +152,13 @@ char* checkListStatus(struct Node* l){
 
 	int i = 0;
 	while(l != NULL){
-		printf("%s - %d - %s\n", l->ID, l->status, l->IP);
+		printf("NAME: %s\n", l->ID);
 		if (l->status == 1){
 			char temp[500];
 			memset(temp, 0, sizeof(temp));
 			
-			pthread_mutex_lock(&USE_SPRINTF);
 			sprintf(temp, "%d) %s\n", ++i, l->ID);
 			strcat(array, temp);
-			pthread_mutex_unlock(&USE_SPRINTF);
 		}
 		l = l->next;
 	}
@@ -161,9 +173,25 @@ struct SendData getClientData(struct Node* l, char* name){
 	struct SendData rere;
 	rere.port = -1;
 
+	// Get LC ver of self
+	char lowerCheck[256];
+	memset(lowerCheck, 0, sizeof(lowerCheck));
+	strcpy(lowerCheck, name);
+	for(int i = 0; lowerCheck[i]; ++i){
+		lowerCheck[i] = tolower(lowerCheck[i]);
+	}
+
 	while(l != NULL){
 		//printf("ID: %s\n", l->ID);
-		if (strcmp(l->ID, name) == 0){
+		// Set to LowerCase
+		char lc[256];
+		memset(lc, 0, sizeof(lc));
+		strcpy(lc, l->ID);
+		for(int i = 0; lc[i]; ++i){
+			lc[i] = tolower(lc[i]);
+		}
+
+		if (strcmp(lowerCheck, lc) == 0){
 			// Don't return data if the client isn't waiting
 			if (l->status == 0) break;
 
@@ -286,10 +314,6 @@ void* handleNewClient(void* td){
 int main(int argc, char **argv){
 	LIST = NULL;
 	if (pthread_mutex_init(&EDIT_LIST, NULL) != 0){
-		fprintf(stderr, "Error: Failed to Init mutex");
-    	exit(1);
-	}
-	if (pthread_mutex_init(&USE_SPRINTF, NULL) != 0){
 		fprintf(stderr, "Error: Failed to Init mutex");
     	exit(1);
 	}
@@ -424,6 +448,5 @@ int main(int argc, char **argv){
 
 	close(listen_fd);
 	pthread_mutex_destroy (&EDIT_LIST);
-	pthread_mutex_destroy (&USE_SPRINTF);
 	exit(0);
 }
