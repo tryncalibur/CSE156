@@ -2,22 +2,22 @@
 # 1579170
 # Programming Assignment 5: Simple chat
 
-all : myclient myserver rm
+all : client server rm
 
-myclient : myclient.o
-	gcc -o ./bin/myclient ./myclient.o -lpthread
+client : client.o
+	gcc -o ./bin/client ./client.o -lpthread
 
-myclient.o : 
-	gcc -c -std=c99 -Wall ./src/myclient.c -lpthread
+client.o : 
+	gcc -c -std=c99 -Wall ./src/client.c -lpthread
 
-myserver : myserver.o
-	gcc -o ./bin/myserver ./myserver.o -lpthread
+server : server.o
+	gcc -o ./bin/server ./server.o -lpthread
 
-myserver.o : 
-	gcc -c -std=c99 -Wall ./src/myserver.c -lpthread
+server.o : 
+	gcc -c -std=c99 -Wall ./src/server.c -lpthread
 
 clean :
-	rm -f myserver.o myclient.o myclient myserver
+	rm -f server.o client.o client server
 
 rm :
-	rm -f myserver.o myclient.o
+	rm -f server.o client.o

@@ -92,9 +92,11 @@ void* chatRead(void* cData){
 
 				// Print message
 				else{
-					write(STDOUT_FILENO, "\n", strlen("\n"));
-					write(STDOUT_FILENO, buffer, strlen(buffer));
-					write(STDOUT_FILENO, promptID, strlen(promptID));
+					if (checkMode == CHAT){
+						write(STDOUT_FILENO, "\n", strlen("\n"));
+						write(STDOUT_FILENO, buffer, strlen(buffer));
+						write(STDOUT_FILENO, promptID, strlen(promptID));
+					}
 				}
 			}
 		}
@@ -192,7 +194,7 @@ void* waitWrite(void* v){
 				pthread_mutex_unlock(&EDIT_MODE);
 			 return NULL;
 			}
-			write(STDOUT_FILENO, promptID, strlen(promptID));
+			if (checkMode == WAIT) write(STDOUT_FILENO, promptID, strlen(promptID));
 		}
 	}
 
@@ -206,7 +208,7 @@ void* waitRead(void* v){
 	int listen_fd = socket(AF_INET, SOCK_STREAM, 0);
 	if (listen_fd < 0){
 		fprintf(stderr, "Error: Socket Creation failed\n");
-    	exit(1);
+    	return NULL;
 	}
 	struct sockaddr_in servaddr;
 	memset(&servaddr, 0, sizeof(servaddr));
@@ -218,8 +220,7 @@ void* waitRead(void* v){
 	if (bind(listen_fd, (const struct sockaddr*)&servaddr, sizeof(servaddr)) < 0){
 		fprintf(stderr, "Error: Bind Failed\n");
 		close (listen_fd);
-		close(*fd);
-    	exit(1);
+    	return NULL;
 	}
 	
 
@@ -231,7 +232,7 @@ void* waitRead(void* v){
 		fprintf(stderr, "Error: Failed to get socket details\n");
 		close (listen_fd);
 		close(*fd);
-		exit(1);
+		return NULL;
 	}
 	struct sockaddr_in* ipv4Addr = (struct sockaddr_in*) &addr;
 	char buffer[1024];
@@ -242,7 +243,7 @@ void* waitRead(void* v){
 		fprintf(stderr, "ERROR: Send to host server failed\n");
 		close (listen_fd);
 		close (*fd);
-		exit(1);
+		return NULL;
 	}
 
 	// Listen for clients
@@ -255,7 +256,7 @@ void* waitRead(void* v){
 		pthread_mutex_lock(&EDIT_MODE);
 		int checkMode = mode;
 		pthread_mutex_unlock(&EDIT_MODE);
-		if (checkMode != WAIT) break;
+		if (checkMode != WAIT) return NULL;
 
 		// Check for connections
 		res = input_timeout(listen_fd, 0);
@@ -277,7 +278,7 @@ void* waitRead(void* v){
 
 
 // Multithreading functions
-void handleChat(struct Client cData){
+int handleChat(struct Client cData){
 	// Set Status
 	pthread_mutex_lock(&EDIT_MODE);
 	mode = CHAT;
@@ -295,9 +296,9 @@ void handleChat(struct Client cData){
 		while(r == 0){
 			r = recv(cData.fd, temp, sizeof(temp), 0);
 			if (r < 0) {
-				fprintf(stderr, "ERROR: send to client get Name\n");
+				fprintf(stderr, "ERROR: recv to client get Name\n");
 				close (cData.fd);
-				exit(1);
+				return -1;
 			}
 		}
 		strcpy(pass.ID, temp);
@@ -306,7 +307,7 @@ void handleChat(struct Client cData){
 		if (send(cData.fd, GlobalID, strlen(GlobalID), 0) < 0) {
 			fprintf(stderr, "ERROR: send to client get Name\n");
 			close (cData.fd);
-			exit(1);
+			return -1;
 		}
 		strcpy(pass.ID, cData.ID);
 	}
@@ -322,36 +323,36 @@ void handleChat(struct Client cData){
 	if (pthread_create(&writeProcess, NULL, chatWrite, &pass)){
 		fprintf(stderr, "Error: Failed to crate a new thread\n");
 		close (pass.fd);
-		exit(1);
+		return -1;
 
 	}
 	pthread_t readProcess;
 	if (pthread_create(&readProcess, NULL, chatRead, &pass)){
 		fprintf(stderr, "Error: Failed to crate a new thread\n");
 		close (pass.fd);
-		exit(1);
+		return -1;
 	}
 
 	// Join both threads
 	if(pthread_join(writeProcess, NULL) != 0){
 		fprintf(stderr, "Error: Failed to join thread\n");
 		close (pass.fd);
-		exit(1);
+		return -1;
 	}
 	if(pthread_join(readProcess, NULL) != 0){
 		fprintf(stderr, "Error: Failed to join thread\n");
 		close (pass.fd);
-		exit(1);
+		return -1;
 	}
 
 	memset(temp, 0, sizeof(0));
 	sprintf(temp, "Left conversation with %s.\n", pass.ID);
 	write(STDOUT_FILENO, temp, strlen(temp));
 
-	return;
+	return 1;
 }
 
-void handleWait(int fd){
+int handleWait(int fd){
 	// Initiate Wait
 	pthread_mutex_lock(&EDIT_MODE);
 	mode = WAIT;
@@ -364,7 +365,7 @@ void handleWait(int fd){
 	if (pthread_create(&writeProcess, NULL, waitWrite, NULL)){
 		fprintf(stderr, "Error: Failed to crate a new thread\n");
 		close (fd);
-		exit(1);
+		return -1;
 	}
 	
 	// Wait for server to send client to chat
@@ -372,28 +373,28 @@ void handleWait(int fd){
 	if (pthread_create(&readProcess, NULL, waitRead, &fd)){
 		fprintf(stderr, "Error: Failed to crate a new thread\n");
 		close (fd);
-		exit(1);
+		return -1;
 	}
 	
 	// Join both threads
 	if(pthread_join(writeProcess, NULL) != 0){
 		fprintf(stderr, "Error: Failed to join thread\n");
 		close (fd);
-		exit(1);
+		return -1;
 	}
 	
 	int* new_FD = NULL;
 	if(pthread_join(readProcess, (void**)&new_FD) != 0){
 		fprintf(stderr, "Error: Failed to join thread\n");
 		close (fd);
-		exit(1);
+		return -1;
 	}
 	
 	// End waiting
 	if (send(fd, "END_Wait\n\n", strlen("END_Wait\n\n"), 0) < 0) {
 		fprintf(stderr, "ERROR: send to host server failed\n");
 		close (fd);
-		exit(1);
+		return -1;
 	}
 
 	// Start Chat if called
@@ -403,17 +404,18 @@ void handleWait(int fd){
 		strcpy(cData.ID, "GETNAME\n");
 
 		if (mode == WAIT_SUC){
-			handleChat(cData);
+			return handleChat(cData);
 		}
 		else printf("IP can't be found \n");
 
 		close(*new_FD);
 	}
+	else if (mode == WAIT_END) printf("Stopped waiting\n");
 
-	return;
+	return 1;
 }
 
-void handleConnect(int fd, char* ID){
+int handleConnect(int fd, char* ID){
 	char buffer[1024];
 	memset(buffer, 0 ,sizeof(buffer));
 	sprintf(buffer, "ConnectTo\n\n%s", ID);
@@ -422,7 +424,7 @@ void handleConnect(int fd, char* ID){
 	if (send(fd, buffer, strlen(buffer), 0) < 0) {
 		fprintf(stderr, "ERROR: send to host server failed\n");
 		close (fd);
-		exit(1);
+		return -1;
 	}
 
 	// Get Data
@@ -430,14 +432,14 @@ void handleConnect(int fd, char* ID){
 	if (recv(fd, &sd, sizeof(sd), 0) < 0) {
 		fprintf(stderr, "ERROR: send to host server failed\n");
 		close (fd);
-		exit(1);
+		return -1;
 	}
 	// Check if valid
 	if (sd.port <= 0){
 		memset(buffer, 0 ,sizeof(buffer));
 		sprintf(buffer, "%s is not availiable\n", ID);
 		write(STDOUT_FILENO, buffer, strlen(buffer));
-		return;
+		return 0;
 	}
 	else{
 		struct sockaddr_in servaddr;
@@ -448,14 +450,14 @@ void handleConnect(int fd, char* ID){
 		int listen_fd = socket(AF_INET, SOCK_STREAM, 0);
 		if(listen_fd < 0){
 			fprintf(stderr, "ERROR: Socket could not be created\n");
-			return;
+			return -1;
 		}
 
 		int inetCheck = inet_pton(AF_INET, sd.IP, &servaddr.sin_addr);
 		if (inetCheck <= 0){
 			fprintf(stderr, "ERROR: Invalid address\n");
 			close (listen_fd);
-			return;
+			return -1;
 		}
 
 		
@@ -464,14 +466,14 @@ void handleConnect(int fd, char* ID){
 			fprintf(stderr, "ERROR: Connection Failed\n");
 			fprintf(stderr, "\t%s\n", strerror(errno));
 			close (listen_fd);
-			return;
+			return -1;
 		}
 		struct Client c;
 		c.fd = listen_fd;
 		strcpy(c.ID, ID);
-		handleChat(c);
+		return handleChat(c);
 	}
-	return;
+	return -1;
 }
 
 // Handle Functions
@@ -482,7 +484,7 @@ int callCommand(char* command, int fd){
 		if (send(fd, "GetList\n\n", strlen("GetList\n\n"), 0) <= 0) {
 			fprintf(stderr, "ERROR: Send to host server failed\n");
 			close (fd);
-			exit(1);
+			return -1;
 		}
 
 		char buffer[1024];
@@ -490,7 +492,7 @@ int callCommand(char* command, int fd){
 		if (recv(fd, buffer, sizeof(buffer), 0) < 0) {
 			fprintf(stderr, "ERROR: recv from host server failed\n");
 			close (fd);
-			exit(1);
+			return -1;
 		}
 		write(STDOUT_FILENO, buffer, strlen(buffer));
 		return 1;
@@ -498,8 +500,7 @@ int callCommand(char* command, int fd){
 
 	// Wait for connection
 	else if (strcmp(command, "/wait") == 0){
-		handleWait(fd);
-		return 1;
+		return handleWait(fd);
 	}
 
 	// Connect with ID

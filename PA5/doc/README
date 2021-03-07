@@ -1,0 +1,33 @@
+Trystan Nguyen 1579170
+trtanguy@ucsc.edu
+Lab05: Simple Chat
+
+server.c
+	Source file used to create server
+
+server
+	Usage: ./server <listen-port>
+	Executable binary used to listen to the given port and creates new threads to handle clients. This process will keep track of all clients that connect until they leave cleanly.
+
+	Memory leaks will occur if server is forcibly ended while connections still open
+
+client.c
+	source file used to create client
+
+client
+	Usage: ./client <IP> <Port> <ID> 
+	Executable binary used to connect to the server at the give IP and Port using ID. If ID is already taken, client will terminiate. Client starts in INFO Mode
+
+	Modes:
+		INFO: Client will listen for Commands.
+		WAIT: Client will listen for incoming connections from other clients
+		CHAT: Client Will send and recvieve messages to and from connected client
+
+	Commands:
+		/list: Prints list of client IDs on server searching for clients
+		/wait: Sends the server a message that client is looking for connections. Enters WAIT mode. If connection is made, enters CHAT mode.
+		/connect <ID>: Connects to ID if Client of ID is waiting for connections. Enters CHAT mode if successful.
+		/quit: Ends Connects with any client / server and terminates self. 
+		Ctrl + c: Ends Modes WAIT or CHAT, returns to listening to commands in INFO mode.
+
+

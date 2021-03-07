@@ -49,6 +49,35 @@ int input_timeout (int fd, unsigned int secs){
 	return(select(FD_SETSIZE, &set, NULL, NULL, &timeout));
 }
 
+// Insert Node in Alphabetical Order
+void insertNode(struct Node* add){
+	pthread_mutex_lock(&EDIT_LIST);
+	if (LIST == NULL) LIST = add;
+	else{
+		struct Node* findEnd = LIST;
+		struct Node* holdPrev = NULL;
+		while(strcmp(add->ID, findEnd->ID) > 0 && findEnd->next != NULL){
+			holdPrev = findEnd;
+			findEnd = findEnd->next;
+		}
+		printf ("%s && %s = %d\n", add->ID, findEnd->ID, strcmp(add->ID, findEnd->ID));
+		if (findEnd->next == NULL && strcmp(add->ID, findEnd->ID) > 0) findEnd->next = add;
+		else{
+			printf("CUSTOM--------\n");
+			if (holdPrev == NULL){
+				printf("HEAD\n");
+				LIST = add;
+				add->next = findEnd;
+			}
+			else{
+				holdPrev->next = add;
+				add->next = findEnd;
+			}
+		}
+	}
+	pthread_mutex_unlock(&EDIT_LIST);
+}
+
 // Free node
 // -1 if error, else 1
 int freeNode(struct Node* cur){
@@ -133,7 +162,7 @@ struct SendData getClientData(struct Node* l, char* name){
 	rere.port = -1;
 
 	while(l != NULL){
-		printf("ID: %s\n", l->ID);
+		//printf("ID: %s\n", l->ID);
 		if (strcmp(l->ID, name) == 0){
 			// Don't return data if the client isn't waiting
 			if (l->status == 0) break;
@@ -150,7 +179,7 @@ struct SendData getClientData(struct Node* l, char* name){
 
 // New Thread -------------------------------------------------------------------------
 void* handleNewClient(void* td){
-	printf("NEW THREAD: %ld\n", pthread_self());
+	//printf("NEW THREAD: %ld\n", pthread_self());
 	struct ThreadData* data = (struct ThreadData*)td;
 	// Await request
 	char recvBuffer[1024];
@@ -163,9 +192,10 @@ void* handleNewClient(void* td){
 			if (rec < 0) {
 				fprintf(stderr, "ERROR: Failed to recv from client\n");
 				close(data->client_fd);
-	    		exit(1);
+				memset(recvBuffer, 0, sizeof(recvBuffer));
+				strcpy(recvBuffer, "Terminate\n\n");
 			}
-			if (rec != 0) printf("RECV: %s\n", recvBuffer);
+			//if (rec != 0) printf("RECV: %s\n", recvBuffer);
 
 			// /list
 			if(strcmp(recvBuffer, "GetList\n\n") == 0){
@@ -174,21 +204,23 @@ void* handleNewClient(void* td){
 					if (send(data->client_fd, strList, strlen(strList), 0) < 0) {
 						fprintf(stderr, "ERROR: Failed to send to client\n");
 						close(data->client_fd);
-			    		exit(1);
+			    		memset(recvBuffer, 0, sizeof(recvBuffer));
+						strcpy(recvBuffer, "Terminate\n\n");
 					}
 				}
 				else{
 					if (send(data->client_fd, "No Connections Availible\n", strlen("No Connections Availible\n"), 0) < 0) {
 						fprintf(stderr, "ERROR: Failed to send to client\n");
 						close(data->client_fd);
-			    		exit(1);
+			    		memset(recvBuffer, 0, sizeof(recvBuffer));
+						strcpy(recvBuffer, "Terminate\n\n");
 					}
 				}
 			}
 
 			// Deal with waiting status
 			else if(strstr(recvBuffer, "Waiting\n\n") != NULL){
-				printf("WAITING ACT\n");
+				//printf("WAITING ACT\n");
 				char* getPort = recvBuffer;
 				getPort += 9;
 
@@ -198,7 +230,7 @@ void* handleNewClient(void* td){
 				pthread_mutex_unlock(&EDIT_LIST);
 			}
 			else if(strcmp(recvBuffer, "END_Wait\n\n") == 0){
-				printf("WAITING END\n");
+				//printf("WAITING END\n");
 				pthread_mutex_lock(&EDIT_LIST);
 				data->ClientData->status = 0;
 				pthread_mutex_unlock(&EDIT_LIST);
@@ -206,22 +238,23 @@ void* handleNewClient(void* td){
 
 			// Req for Client data by ID
 			else if(strstr(recvBuffer, "ConnectTo\n\n") != NULL){
-				printf("Getting Client Data\n");
+				//printf("Getting Client Data\n");
 				char* temp = recvBuffer;
 				temp += 11;
 
 				struct SendData rere = getClientData(LIST, temp);
-				printf("ID Found: %s\n", rere.ID);
+				//printf("ID Found: %s\n", rere.ID);
 				if (send(data->client_fd, &rere, sizeof(rere), 0) < 0) {
 					fprintf(stderr, "ERROR: Failed to send to client\n");
 					close(data->client_fd);
-		    		exit(1);
+		    		memset(recvBuffer, 0, sizeof(recvBuffer));
+					strcpy(recvBuffer, "Terminate\n\n");
 				}
 			}
 
 			// /quit
 			else if (strcmp(recvBuffer, "Terminate\n\n") == 0){
-				printf("END BY QUIT\n");
+				//printf("END BY QUIT\n");
 				close(data->client_fd);
 				if (freeNode(data->ClientData) == -1){
 					fprintf(stderr, "ERROR: Failed to free Node\n");
@@ -233,10 +266,18 @@ void* handleNewClient(void* td){
 			}
 		}
 	}
+	if (res < 0){
+		close(data->client_fd);
+		if (freeNode(data->ClientData) == -1){
+			fprintf(stderr, "ERROR: Failed to free Node\n");
+    		exit(1);
+		}
+		free(data);
+	}
 
-	printf("RES = %d\n", res);
-	if (res == -1) perror("\tERROR FROM RES");
-	printf("END THREAD: %ld\n", pthread_self());
+	//printf("RES = %d\n", res);
+	//if (res == -1) perror("\tERROR FROM RES");
+	//printf("END THREAD: %ld\n", pthread_self());
 	pthread_exit(NULL);
 }
 
@@ -350,16 +391,7 @@ int main(int argc, char **argv){
 			newAddress->next = NULL;
 
 			// Add to List
-			pthread_mutex_lock(&EDIT_LIST);
-			if (LIST == NULL) LIST = newAddress;
-			else{
-				struct Node* findEnd = LIST;
-				while(findEnd->next != NULL){
-					findEnd = findEnd->next;
-				}
-				findEnd->next = newAddress;
-			}
-			pthread_mutex_unlock(&EDIT_LIST);
+			insertNode(newAddress);
 
 			// Create Thread
 			struct ThreadData* td = (struct ThreadData*)malloc(sizeof(struct ThreadData));
