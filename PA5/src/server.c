@@ -37,6 +37,7 @@ struct Node* LIST;
 pthread_mutex_t EDIT_LIST;
 
 // Utility ----------------------------------------------------------------------------
+// Timeout read fd
 int input_timeout (int fd, unsigned int secs){
 	fd_set set;
 	struct timeval timeout;
@@ -152,7 +153,7 @@ char* checkListStatus(struct Node* l){
 
 	int i = 0;
 	while(l != NULL){
-		printf("NAME: %s\n", l->ID);
+		//printf("NAME: %s\n", l->ID);
 		if (l->status == 1){
 			char temp[500];
 			memset(temp, 0, sizeof(temp));
@@ -168,7 +169,7 @@ char* checkListStatus(struct Node* l){
 	return rere;
 }
 
-
+// Get IP and Port of selected ID if valid
 struct SendData getClientData(struct Node* l, char* name){
 	struct SendData rere;
 	rere.port = -1;
@@ -312,6 +313,7 @@ void* handleNewClient(void* td){
 
 // Main --------------------------------------------------------------------------------
 int main(int argc, char **argv){
+	// Initiate global values
 	LIST = NULL;
 	if (pthread_mutex_init(&EDIT_LIST, NULL) != 0){
 		fprintf(stderr, "Error: Failed to Init mutex");

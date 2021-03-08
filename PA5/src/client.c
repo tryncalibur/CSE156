@@ -65,6 +65,7 @@ void* chatRead(void* cData){
 	int checkMode = CHAT;
 
 	while(res >= 0){
+		// Check Mode
 		pthread_mutex_lock(&EDIT_MODE);
 		checkMode = mode;
 		pthread_mutex_unlock(&EDIT_MODE);
@@ -72,6 +73,7 @@ void* chatRead(void* cData){
 
 		res = input_timeout(comm_fd, 0);
 		if (res > 0){
+			// Get Message
 			memset(buffer, 0 , sizeof(buffer));
 			int rec = recv(comm_fd, buffer, sizeof(buffer), 0);
 			if (rec < 0) {
@@ -135,6 +137,9 @@ void* chatWrite(void* cData){
 			memset(buffer, 0, sizeof(buffer));
 			if (checkMode == CHAT) read(STDIN_FILENO, buffer, sizeof(buffer));
 
+			char sendbuffer[1300];
+			memset(sendbuffer, 0 , sizeof(sendbuffer));
+
 			// Check command
 			buffer[strlen(buffer)-1] = '\0';
 			if (strcmp(buffer, "/quit") == 0){
@@ -143,12 +148,13 @@ void* chatWrite(void* cData){
 				pthread_mutex_unlock(&EDIT_MODE);
 				checkMode = QUIT;
 			}
+			else if(buffer[0] == '/'){
+				sprintf(sendbuffer, "Command %s not recognized\n", buffer);
+				write(STDOUT_FILENO, sendbuffer, strlen(sendbuffer));
+			}
 
 			// Send Message
-			char sendbuffer[1300];
-			memset(sendbuffer, 0 , sizeof(sendbuffer));
-
-			if(strlen(buffer) != 0){
+			else if(strlen(buffer) != 0){
 				if (checkMode == CHAT) sprintf(sendbuffer, "%s: %s\n", GlobalID, buffer);
 				if (send(comm_fd, sendbuffer, strlen(sendbuffer), 0) < 0) {
 					fprintf(stderr, "ERROR: Failed to send to client\n");
@@ -161,7 +167,7 @@ void* chatWrite(void* cData){
 		}
 	}
 
-	printf("FAILED TO END WRITE THREAD CLEANLY\n");
+	//printf("FAILED TO END WRITE THREAD CLEANLY\n");
 	return NULL;
 }
 
@@ -192,8 +198,16 @@ void* waitWrite(void* v){
 				pthread_mutex_lock(&EDIT_MODE);
 				mode = QUIT;
 				pthread_mutex_unlock(&EDIT_MODE);
-			 return NULL;
+			 	return NULL;
 			}
+			else if(readTerminal[0] == '/'){
+				char sendbuffer[1500];
+				memset(sendbuffer, 0, sizeof(sendbuffer));
+				sprintf(sendbuffer, "Command %s not recognized\n", readTerminal);
+				write(STDOUT_FILENO, sendbuffer, strlen(sendbuffer));
+			}
+
+			// Print prompt for newline
 			if (checkMode == WAIT) write(STDOUT_FILENO, promptID, strlen(promptID));
 		}
 	}
@@ -239,6 +253,7 @@ void* waitRead(void* v){
 	memset(buffer, 0 , sizeof(buffer));
 	sprintf(buffer, "Waiting\n\n%d", ipv4Addr->sin_port);
 
+	// Send Server waiting status
 	if (send(*fd, buffer, strlen(buffer), 0) <= 0) {
 		fprintf(stderr, "ERROR: Send to host server failed\n");
 		close (listen_fd);
@@ -267,10 +282,12 @@ void* waitRead(void* v){
 
 	}
 
+	// Check mode
 	pthread_mutex_lock(&EDIT_MODE);
 	mode = WAIT_SUC;
 	pthread_mutex_unlock(&EDIT_MODE);
 
+	// Return socket descriptor
 	int* rere = &comm_fd;
 	return rere;
 }
@@ -284,7 +301,6 @@ int handleChat(struct Client cData){
 	mode = CHAT;
 	pthread_mutex_unlock(&EDIT_MODE);
 
-	//Isues
 	struct Client pass;
 	pass.fd = cData.fd;
 
@@ -532,6 +548,7 @@ int callCommand(char* command, int fd){
 	return 0;
 }
 
+// Handle Signal interrupt
 void sigintHandler(int sig_num) { 
 	pthread_mutex_lock(&EDIT_MODE);
 	if (mode == CHAT || mode == WAIT) {
@@ -546,6 +563,7 @@ void sigintHandler(int sig_num) {
 
 //Main ------------------------------------------------------------------------
 int main(int argc, char **argv){
+	// Initiate global values
 	mode = INFO;
 	if (pthread_mutex_init(&EDIT_MODE, NULL) != 0){
 		fprintf(stderr, "Error: Failed to Init mutex");
