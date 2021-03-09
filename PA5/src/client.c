@@ -23,8 +23,8 @@ struct Client{
 
 struct SendData{
 	char ID [256];
-    char IP [INET_ADDRSTRLEN];
-    int port;
+	char IP [INET_ADDRSTRLEN];
+	int port;
 };
 
 // Define Modes
@@ -79,7 +79,7 @@ void* chatRead(void* cData){
 			if (rec < 0) {
 				fprintf(stderr, "ERROR: Failed to recv from client\n");
 				close(comm_fd);
-	    	 	return NULL;
+				return NULL;
 			}
 
 
@@ -124,7 +124,7 @@ void* chatWrite(void* cData){
 			if (send(comm_fd, "END_COMM\n\n", strlen("END_COMM\n\n"), 0) < 0) {
 				fprintf(stderr, "ERROR: Failed to send to client\n");
 				close(comm_fd);
-	    	 	return NULL;
+				return NULL;
 			}
 			return NULL;
 		}
@@ -159,7 +159,7 @@ void* chatWrite(void* cData){
 				if (send(comm_fd, sendbuffer, strlen(sendbuffer), 0) < 0) {
 					fprintf(stderr, "ERROR: Failed to send to client\n");
 					close(comm_fd);
-		    	 	return NULL;
+					return NULL;
 				}
 			}
 
@@ -198,7 +198,7 @@ void* waitWrite(void* v){
 				pthread_mutex_lock(&EDIT_MODE);
 				mode = QUIT;
 				pthread_mutex_unlock(&EDIT_MODE);
-			 	return NULL;
+				return NULL;
 			}
 			else if(readTerminal[0] == '/'){
 				char sendbuffer[1500];
@@ -222,7 +222,7 @@ void* waitRead(void* v){
 	int listen_fd = socket(AF_INET, SOCK_STREAM, 0);
 	if (listen_fd < 0){
 		fprintf(stderr, "Error: Socket Creation failed\n");
-    	return NULL;
+		return NULL;
 	}
 	struct sockaddr_in servaddr;
 	memset(&servaddr, 0, sizeof(servaddr));
@@ -234,7 +234,7 @@ void* waitRead(void* v){
 	if (bind(listen_fd, (const struct sockaddr*)&servaddr, sizeof(servaddr)) < 0){
 		fprintf(stderr, "Error: Bind Failed\n");
 		close (listen_fd);
-    	return NULL;
+		return NULL;
 	}
 	
 
@@ -426,7 +426,7 @@ int handleWait(int fd){
 
 		close(*new_FD);
 	}
-	else if (mode == WAIT_END) printf("Stopped waiting\n");
+	else if (mode == WAIT_END || mode == QUIT) printf("Stopped waiting\n");
 
 	return 1;
 }
@@ -567,12 +567,12 @@ int main(int argc, char **argv){
 	mode = INFO;
 	if (pthread_mutex_init(&EDIT_MODE, NULL) != 0){
 		fprintf(stderr, "Error: Failed to Init mutex");
-    	exit(1);
+		exit(1);
 	}
 
 	if (argc == 3){
 		fprintf(stderr, "Usage: myclient <IP> <Port> <ID>\n");
-   	 	exit(1);
+		exit(1);
 	}
 	char* ip = argv[1];
 	char* portString = argv[2];
@@ -617,24 +617,24 @@ int main(int argc, char **argv){
 	// Get IP
 	struct ifaddrs *ifap;
 	struct ifaddrs *ifa;
-    struct sockaddr_in *sa;
-    char *addrSTR;
+	struct sockaddr_in *sa;
+	char *addrSTR;
 
-    if(getifaddrs (&ifap) == -1){
-    	fprintf(stderr, "ERROR: Failed to get IP address\n");
+	if(getifaddrs (&ifap) == -1){
+		fprintf(stderr, "ERROR: Failed to get IP address\n");
 		close (listen_fd);
 		exit(1);
-    }
-    for (ifa = ifap; ifa; ifa = ifa->ifa_next) {
-        if (ifa->ifa_addr && ifa->ifa_addr->sa_family==AF_INET) {
-            sa = (struct sockaddr_in *) ifa->ifa_addr;
-            addrSTR = inet_ntoa(sa->sin_addr);
-            if(strcmp(addrSTR, "127.0.0.1") != 0) break;
-        }
-    }
+	}
+	for (ifa = ifap; ifa; ifa = ifa->ifa_next) {
+		if (ifa->ifa_addr && ifa->ifa_addr->sa_family==AF_INET) {
+			sa = (struct sockaddr_in *) ifa->ifa_addr;
+			addrSTR = inet_ntoa(sa->sin_addr);
+			if(strcmp(addrSTR, "127.0.0.1") != 0) break;
+		}
+	}
 
-    freeifaddrs(ifap);
-    //printf("Interface: %s\tAddress: %s\n", ifa->ifa_name, addrSTR);
+	freeifaddrs(ifap);
+	//printf("Interface: %s\tAddress: %s\n", ifa->ifa_name, addrSTR);
 
 
 	// Send Data
@@ -697,7 +697,7 @@ int main(int argc, char **argv){
 	}
 
   
-  	
+	
 	close (listen_fd);
 	pthread_mutex_destroy (&EDIT_MODE);
 }

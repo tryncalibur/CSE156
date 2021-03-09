@@ -1,0 +1,110 @@
+# Trystan Nguyen trtanguy@ucsc.edu
+# 1579170
+# Programming Assignment 5: Simple chat
+
+Server:
+	Usage: ./server <listen-port>
+	When server is executed, it will open a socket at port <listen-port> and with any address. When the server recieves a connection, it will do the following:
+		1. Parse the first message into ID and IP. 
+		2. Check to see if ID is already taken
+			a. If ID is already taken, Server will send a message to Client indicating Error
+			b. If ID is not taken, Server will send a message approving Client aand save ID/IP into a linked list. The Server will then Create a new thread to deal with incoming requests from that client.
+
+	Client Handling Requests:
+	When the new thread is created, the server will take in requests from the client and respond accordingly.
+		1. "GetList\n\n"
+			Server will look through the linked list of Clients and send a list of Clients waiting for connetions.
+		2. "Waiting\n\n<Port>"
+			Server will set client's status was waiting and set port, will be availible for GetList and connections.
+		3. "END_Wait\n\n"
+			Sever will set client's status to not waiting. 
+		4. "ConnectTo\n\n<ID>"
+			Server will find Client based on ID and send ID, IP, and Port if the Client of ID is waiting for connection. 
+			If Client of ID is not waiting, return an error message.
+		5. "Terminate\n\n"
+			Server will terminiate connections with client and remove Client Data from Linked List
+
+
+Client:
+	Usage: ./client <IP> <Port> <ID>
+	When client is executed, it will contact the server of IP and Port. It will send the Client's IP and ID. The Server will respond with either a confirm or deny. If the client is denied, then the client will terminate. Otherwise, the client will listen to commands on the command line.
+
+	Commands:
+		1. /list
+			Requests List from Server and prints to Terminal
+		2. /wait
+			Sends "Waiting\n\n<Port>" to Server and awaits connection at specified port in Wait mode. When WAIT is ended from a connection made or forcibly quit, "END_Wait\n\n" is sent to the server. After a succesful connection, the first message recieved from new client is the ID of said Client. Then, The Client enters Chat mode. If WAIT was forcibly ended, the Client will return to INFO mode.
+		3. /connect <ID>
+			Sends "ConnectTo\n\n<ID>" to Server and recieves IP and Port back, which the Client connects to. After a successful Connection, The first message sent will be the ID of self. Then, The client enters chat mode.
+			Connection fails if ID is not valid or is not waiting for a connection.
+		4. /quit
+			From any mode, client will end current command properly and send "Terminate\n\n" to server and end all connections. Then the client will end.
+		5. ctrl + c: Return to INFO mode from Wait or Chat mode, properly closing connections when needed.
+
+
+General Protocols:
+	1. Client Server communications will always start with client sending a request and the Server responding with the data requested, each within one message. If the Request cannot be handled, the server will send a specific error message to client indicating that request cannot be finished.
+	2. All Message to server concerning requests connecting will contain \n\n
+	3. Message from server to client containing data will be formatted as needed
+	4. The client will only be in one mode at a time. INFO will execute all commands while CHAT and WAIT will only expect /quit as a command and won't accept any other /<word> commands.  
+	5. When the Client is in WAIT or CHAT, it will create 2 threads, one for reading and one for writing, and will return back to the main thread when done. 
+
+
+Message Protocols:
+	Client -> Server
+		- "<ID>\n<IP>"
+			Upon Connecting to a server, the client will send their ID and IP to the server.
+			If the server accepts the ID, it will send back "Ok ID\n\n"
+			Otherwise, it will send "Bad ID\n\n"
+		- "GetList\n\n"
+			When the client recieves "/list" from, it will send this to the server. The server will respond with a properly formatted list of clients that are waiting for a server in 1 string. If none exist, the server will send "No Connections Availible\n" instead.
+		- "Waiting\n\n<Port>"
+			When the client recieves "/wait", it will send this message using the newly opened socket's port to the server. The Server will change the Client's status to waiting and port to <Port>
+		- "END_Wait\n\n"
+			When WAIT mode ends, this message will be sent to the server. The server will set the Client's status to not waiting
+		- "ConnectTo\n\n<ID>"
+			When WAIT mode ends successfully, this message will be sent to the server. The server will respond with the <ID>'s IP and Port number if it is waiting for connections. Otherwise, the server will respond with an empty string for the IP and port = -1.
+		- "Terminate\n\n"
+			When the client recieve /quit or gets an error, it will send this message to the Server and close connections. The Server will remove this client from the List of Clients and end connections with client.
+
+	Client -> Client
+		- If the client enters CHAT mode from WAIT, it will recieve the ID from the other client as the first message.
+		- If the client enters CHAT mode from /connect <ID>, it will send its own ID to the other client as the first message.
+		- Any message that doesn't start with "/" will sent to the other client.
+		- If the client gets /quit or ctrl + c while in CHAT mode, it will send "END_COMM\n\n" to the other client and end connections with client.
+		- If the client recieves "END_COMM\n\n", it will leave the CHAT mode
+
+
+Test Cases:
+	- Same ID
+		-Same ID with different Capitals results in error
+	- INFO mode
+		- Bad commands are not accepted
+		- ctrl + c does nothing
+		- /quit ends Client
+	- /list from INFO
+		- With no Connections availible
+		- With Connections availible
+		- After connections is made from 3rd party
+		- After CHAT mode from partipating client
+	- /wait from INFO
+		- Successful connect
+		- quit by ctrl + c ends WAIT mode
+		- quit by /quit ends Client
+	- /connect <ID> from INFO
+		- Connect to <ID>
+		- Connect to <ID> with different cases
+		- Bad connect to <ID> of unavailible client
+		- Bad connect to non existent client
+	- CHAT mode
+		- Alternating Send / Recv msgs
+		- Nonalternating msgs
+		- No messages then quit
+		- Quit via ctrl + c ends CHAT mode
+		- Quit via /quit ends Client
+
+Known Errors:
+	- ID can only be 256 chars long
+	- Memory leaks will occur if the server is closed while connections still exist with clients
+	- The server will unable to send the full list of clients for "/list" if it doesn't fit within 1024 characters
+	- In CHAT mode, clients will only be able to recieve message sizes 1024 - ID length - 1

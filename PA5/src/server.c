@@ -14,17 +14,17 @@
 
 // Structs
 struct Node{ 
-    char ID [256];
-    char IP [INET_ADDRSTRLEN];
-    int port;
-    int status;
-    struct Node* next; 
+	char ID [256];
+	char IP [INET_ADDRSTRLEN];
+	int port;
+	int status;
+	struct Node* next; 
 }; 
 
 struct SendData{
 	char ID [256];
-    char IP [INET_ADDRSTRLEN];
-    int port;
+	char IP [INET_ADDRSTRLEN];
+	int port;
 };
 
 struct ThreadData{
@@ -233,7 +233,7 @@ void* handleNewClient(void* td){
 					if (send(data->client_fd, strList, strlen(strList), 0) < 0) {
 						fprintf(stderr, "ERROR: Failed to send to client\n");
 						close(data->client_fd);
-			    		memset(recvBuffer, 0, sizeof(recvBuffer));
+						memset(recvBuffer, 0, sizeof(recvBuffer));
 						strcpy(recvBuffer, "Terminate\n\n");
 					}
 				}
@@ -241,7 +241,7 @@ void* handleNewClient(void* td){
 					if (send(data->client_fd, "No Connections Availible\n", strlen("No Connections Availible\n"), 0) < 0) {
 						fprintf(stderr, "ERROR: Failed to send to client\n");
 						close(data->client_fd);
-			    		memset(recvBuffer, 0, sizeof(recvBuffer));
+						memset(recvBuffer, 0, sizeof(recvBuffer));
 						strcpy(recvBuffer, "Terminate\n\n");
 					}
 				}
@@ -276,7 +276,7 @@ void* handleNewClient(void* td){
 				if (send(data->client_fd, &rere, sizeof(rere), 0) < 0) {
 					fprintf(stderr, "ERROR: Failed to send to client\n");
 					close(data->client_fd);
-		    		memset(recvBuffer, 0, sizeof(recvBuffer));
+					memset(recvBuffer, 0, sizeof(recvBuffer));
 					strcpy(recvBuffer, "Terminate\n\n");
 				}
 			}
@@ -287,7 +287,7 @@ void* handleNewClient(void* td){
 				close(data->client_fd);
 				if (freeNode(data->ClientData) == -1){
 					fprintf(stderr, "ERROR: Failed to free Node\n");
-		    		exit(1);
+					exit(1);
 				}
 				free(data);
 				
@@ -299,7 +299,7 @@ void* handleNewClient(void* td){
 		close(data->client_fd);
 		if (freeNode(data->ClientData) == -1){
 			fprintf(stderr, "ERROR: Failed to free Node\n");
-    		exit(1);
+			exit(1);
 		}
 		free(data);
 	}
@@ -317,27 +317,27 @@ int main(int argc, char **argv){
 	LIST = NULL;
 	if (pthread_mutex_init(&EDIT_LIST, NULL) != 0){
 		fprintf(stderr, "Error: Failed to Init mutex");
-    	exit(1);
+		exit(1);
 	}
 
 
 	// Check Arguements
 	if (argc != 2){
 		fprintf(stderr, "Expected Format: ./myserver <port-number>\n");
-    	exit(1);
+		exit(1);
 	}
 
 	int port = atoi(argv[1]);
 	if (port == 0){
 		fprintf(stderr, "Error: Enter valid port");
-    	exit(1);
+		exit(1);
 	}
 
 	//Connections
 	int listen_fd = socket(AF_INET, SOCK_STREAM, 0);
 	if (listen_fd < 0){
 		fprintf(stderr, "Error: Socket Creation failed\n");
-    	exit(1);
+		exit(1);
 	}
 	struct sockaddr_in servaddr;
 	memset(&servaddr, 0, sizeof(servaddr));
@@ -349,7 +349,7 @@ int main(int argc, char **argv){
 	if (bind(listen_fd, (const struct sockaddr*)&servaddr, sizeof(servaddr)) < 0){
 		fprintf(stderr, "Error: Bind Failed\n");
 		close (listen_fd);
-    	exit(1);
+		exit(1);
 	}
 	listen(listen_fd, 500);
 
@@ -366,7 +366,7 @@ int main(int argc, char **argv){
 			fprintf(stderr, "ERROR: Recv ID from Client Failed\n");
 			close (comm_fd);
 			close (listen_fd);
-    		exit(1);
+			exit(1);
 		}
 
 		// Isolate Data
