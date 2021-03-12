@@ -1,4 +1,6 @@
 Trystan Nguyen
+trtanguy@ucsc.edu
+157170
 
 
 myclient.c
@@ -6,4 +8,20 @@ myserver.c
 MakeFile
 
 
-THe client will initiate connections with the server and proceed to send over the files, expecting an echo immediately. the server will recieve the files, write, and send back
+Server:
+Usage: ./myserver <port>
+Upon recieving a tcp connection, the server will wait for the client to send the file name. The server will resend the filename concatenated with .echo to the client, and will continously recieve and send the lines of the file until "EOF\n\n" is recieved, of which then the file is closed. The Server will then recieve a size one int array with the file size, which the server will then truncate the file if needed.
+The server will continously do this cycle until "" is recieved from the client in place of a filename, of which the server will close the connection with the client.
+The server will only serve one client, and will not accept another connection until it is done with the prior client.
+
+
+Client
+Usage: ./myclient <ip> <port> <filename 1> <filename 2> ... <filename N>
+Upon successfully sending a tcp connection with the server, for each file in the command line arguement, the client will send the file name to the server and recieve the new name. Then, for each line in the file, the client will send the line to the server and recieve it back and write it to a new file under the name recieved prior. After sending the last line of the file, the client will send "EOF\n\n" as an indicator to close the file on the server side. The client will then send the file size in a int array with size 1 and truncate the echo file accordingly.
+The Client will repeat this process for each file, and then will send the empty string "" as a indicator of all the files are finished and terminate itself.
+The client will timeout after 5 mintutes if it is waiting for the server to send anything
+
+
+When sending and recieving file names and "" to end file client / server connections, data will be sent and recieved as char [1024]
+When sending and recieving data from files, it will be read in as binary from files sent as an unsigned int [1024]
+When sending and recieving file size, it will be sent and recieved as int[1]

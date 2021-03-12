@@ -1,20 +1,23 @@
 # Trystan Nguyen trtanguy@ucsc.edu
 # 1579170
-# Programming Assignment 2: Concurrent UDP Downloader
+# Midterm
 
-all : myclient myserver
+all : myclient myserver rmf
 
 myclient : myclient.o
-	gcc -o ./myclient ./myclient.o -lm
+	gcc -o ./myclient ./myclient.o
 
 myclient.o : 
-	gcc -c -std=c99 -Wall ./myclient.c -lm
+	gcc -c -std=c99 -Wall ./myclient.c
 
 myserver : myserver.o
-	gcc -o ./Server/myserver ./myserver.o -lm
+	gcc -o ./myserver ./myserver.o
 
 myserver.o : 
-	gcc -c -std=c99 -Wall ./myserver.c -lm
+	gcc -c -std=c99 -Wall ./myserver.c
 
 clean :
-	rm -f myserver.o myclient.o myclient ./Server/myserver
+	rm -f myserver.o myclient.o myclient ./myserver
+
+rmf :
+	rm -f myserver.o myclient.o

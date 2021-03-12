@@ -11,7 +11,24 @@
 #include <math.h>
 #include <errno.h>
 
+// Timeout if no signal
+int input_timeout (int fd, unsigned int secs){
+	fd_set set;
+	struct timeval timeout;
+
+	FD_ZERO (&set);
+	FD_SET (fd, &set);
+
+	timeout.tv_sec = secs;
+	timeout.tv_usec = 0;
+	return(select(FD_SETSIZE, &set, NULL, NULL, &timeout));
+}
+
+
 int main(int argc, char **argv){
+	int res = 0;
+
+	// Check Arguements
 	if (argc < 3){
 		fprintf(stderr, "Usage: myclient <IP> <Port> <nfiles>\n");
    	 	return -1;
@@ -31,6 +48,7 @@ int main(int argc, char **argv){
 	servaddr.sin_family = AF_INET;
 	servaddr.sin_port = htons(port);
 
+	// Create Socket
 	int listen_fd = socket(AF_INET, SOCK_STREAM, 0);
 	if(listen_fd < 0){
 		fprintf(stderr, "ERROR: Socket could not be created\n");
@@ -46,7 +64,8 @@ int main(int argc, char **argv){
 
 
 	// Connect to address
-	if (connect(listen_fd, (struct sockaddr*)&servaddr, sizeof(servaddr)) < 0){
+	int cc = connect(listen_fd, (struct sockaddr*)&servaddr, sizeof(servaddr));
+	if (cc < 0){
 		fprintf(stderr, "ERROR: Connection Failed\n");
 		fprintf(stderr, "\t%s\n", strerror(errno));
 		close (listen_fd);
@@ -54,64 +73,145 @@ int main(int argc, char **argv){
 	}
   
 
-	// Read and Send Files:
+	// Read and Send Files from command line arguements:
 	for (int i = 3; i < argc; ++i){
+		// Check if file exist
 		if (access (argv[i], F_OK | R_OK) != 0){
 			fprintf(stderr, "ERROR: File %s doesn't exist\n", argv[i]);
 			continue;
 		}
-		FILE* openF = fopen(argv[i], "rb");
-		if (openF == NULL){
-			fprintf(stderr, "Error: Failed to to open file\n");
-			close (listen_fd);
-			exit(1);
-		}
 
-		char line[1024];
 		char buffer[1024];
 		memset(buffer, 0, sizeof(buffer));
-		while(fgets(line, sizeof(line), openF)){
-			strcat(buffer, line);
-		}
-		char sendData[1024];
-		strcpy(sendData, argv[i]);
-		strcat(sendData, " ");
-		strcat(sendData, buffer);
+		strcpy(buffer, argv[i]);
 
-		if (send(listen_fd, sendData, strlen(sendData), 0) <= 0) {
-		    fprintf(stderr, "ERROR: Send failed\n");
-		    return -1;
-	  	}
-	  	sleep(1);
-
-	  	char buffer2[1024];
-	  	memset(buffer2, 0, sizeof(buffer2));
-		int recvData = recv(listen_fd, buffer2, 1023, 0);
-		if (recvData < 0){
-			fprintf(stderr, "ERROR: Unable to recieve\n");
-			fprintf(stderr, "\t%s\n", strerror(errno));
-			exit(1);
-  		}
-  		sleep(1);
-  		char newName[1024];
-  		strcpy(newName, argv[i]);
-  		strcat(newName, ".echo");
-  		FILE* echo = fopen(newName, "wb");
-  		if (echo == NULL){
-			fprintf(stderr, "Error: Failed to to open file\n");
+		// Send Filename to server
+		if (send(listen_fd, buffer, sizeof(buffer), 0) < 0){
+			fprintf(stderr, "Error: Failed to send\n");
 			close (listen_fd);
 			exit(1);
 		}
-  		fprintf(echo, "%s", buffer2);
-  		fclose(echo);
+
+		//Wait for signal or timeout
+		res = 0;
+		while(res >=0){
+			res = input_timeout(listen_fd, 300);
+			if (res > 0) break;
+			else{
+				fprintf(stderr, "Error: Timeout\n");
+				close (listen_fd);
+				exit(1);
+			}
+		}
+
+		// Recieve new Filename from server
+		memset(buffer, 0, sizeof(buffer));
+		if (recv(listen_fd, buffer, 1024, 0) < 0){
+			fprintf(stderr, "Error: Failed to Recieve\n");
+			close (listen_fd);
+			exit(1);
+		}
+
+		// Open File for reading and file for writing
+		FILE* fr = fopen(argv[i], "rb");
+		FILE* fw = fopen(buffer, "wb");
+		if (fr == NULL || fw == NULL){
+			fprintf(stderr, "Error: Failed to Open File\n");
+			close (listen_fd);
+			exit(1);
+		}
+
+		// Get Each line from file
+		int total = 0;
+		unsigned int line[1024];
+		while(1){
+			// Read line
+			memset(line, 0, sizeof(line));
+			int sum = fread(line, 1, sizeof(unsigned int) * 1024, fr);
+			total += sum;
+
+			// Send data to server
+			if (send(listen_fd, line, sizeof(line), 0) < 0){
+				fprintf(stderr, "Error: Failed to send\n");
+				fclose(fr);
+				fclose(fw);
+				close (listen_fd);
+				exit(1);
+			}
+
+			//Wait for signal or timeout
+			res = 0;
+			while(res >=0){
+				res = input_timeout(listen_fd, 300);
+				if (res > 0) break;
+				else{
+					fprintf(stderr, "Error: Timeout\n");
+					fclose(fr);
+					fclose(fw);
+					close (listen_fd);
+					exit(1);
+				}
+			}
+
+			// Recieve data from server
+			memset(line, 0, sizeof(line));
+			if (recv(listen_fd, line, sizeof(line), 0) < 0){
+				fprintf(stderr, "Error: Failed to Recieve\n");
+				fclose(fr);
+				fclose(fw);
+				close (listen_fd);
+				exit(1);
+			}
+			
+			// Write To file
+			fwrite(line, sizeof(unsigned int), 1024, fw);
+
+			// End loop at end of file
+			if (sum == 0 && feof(fr)) break;
+		}
+
+		// Close files
+		fclose(fr);
+		fclose(fw);
+
+		// Send File Ender
+		memset(line, 0, sizeof(line));
+		memcpy(line, "EOF\n\n", sizeof("EOF\n\n"));
+		if (send(listen_fd, line, sizeof(line), 0) < 0){
+			fprintf(stderr, "Error: Failed to send\n");
+			close (listen_fd);
+			exit(1);
+		}
+
+		// Prevent combining multiple messages
+		sleep(1);
+
+		// Send file length to server
+		int size[1] = {total};
+		if (send(listen_fd, size, sizeof(size), 0) < 0){
+			fprintf(stderr, "Error: Failed to send\n");
+			close (listen_fd);
+			exit(1);
+		}
+
+		// Fix file length of file.echo
+		int tt = truncate(buffer, total);
+		if (tt == -1){
+			fprintf(stderr, "Error: Failed to truncate file\n");
+			close (listen_fd);
+			exit(1);
+		}
+
 	}
 
-	// End Send
-	sleep(1);
-	if (send(listen_fd, "EndOfFiles", strlen("EndOfFiles"), 0) <= 0) {
-	    fprintf(stderr, "ERROR: Send End failed\n");
-	    return -1;
-  	}
+	// Send Final Ack
+	if (send(listen_fd, "", sizeof(""), 0) < 0){
+		fprintf(stderr, "Error: Failed to send\n");
+		close (listen_fd);
+		exit(1);
+	}
 
 
+
+	close(listen_fd);
 }
