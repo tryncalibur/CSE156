@@ -79,7 +79,7 @@ int main(int argc, char* argv[]){
 
 	int res = 0;
 	while(res >= 0){
-		res = input_timeout(sockfd, 5);
+		res = input_timeout(sockfd, 300);
 
 		// Recieve Input
 		if (res > 0){
@@ -134,6 +134,23 @@ int main(int argc, char* argv[]){
 				memset(fileName, 0 , sizeof(fileName));
 			}
 
+		}
+
+		// Assumed the File is completely dropped
+		if (res == 0){
+			if (current != NULL && strlen(fileName) != 0){
+				fprintf(stderr, "Error: Failed to Recieve end of file. Dropping current file.\n");
+				// Close file
+				fclose(current);
+				current = NULL;
+
+				// Remove File
+				if (remove(fileName) != 0) fprintf(stderr, "\tUnable to delete current file\n");
+
+				// Reset Reading conditions
+				expectedSeq = 0;
+				memset(fileName, 0 , sizeof(fileName));
+			}
 		}
 	}
 

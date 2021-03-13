@@ -112,7 +112,7 @@ int main(int argc, char* argv[]){
 			int res = 0;
 			int counterResend = 0;
 			while(res >= 0){
-				res = input_timeout(sockfd, 300);
+				res = input_timeout(sockfd, 30);
 
 				// Handle Response
 				if (res > 0){
@@ -138,21 +138,40 @@ int main(int argc, char* argv[]){
 					}
 				}
 
-				// Resend data after 15 repeated attempts
+				// Resend data after 30 seconds
 				else if(res == 0){
 					++counterResend;
-					if(counterResend > 15){
-						sent = send(sockfd, (const struct Message*)&sendMsg, sizeof(sendMsg), 0);
-						if (sent < 0){
-							fprintf(stderr, "Error: Failed to resend data\n");
-							fclose(readFile);
-							fclose(echo);
-							close (sockfd);
-							exit(1);
-						}
+					if (counterResend >= 10){
+						res = -5;
+						break;
 					}
+					sent = send(sockfd, (const struct Message*)&sendMsg, sizeof(sendMsg), 0);
+					if (sent < 0){
+						fprintf(stderr, "Error: Failed to resend data\n");
+						fclose(readFile);
+						fclose(echo);
+						close (sockfd);
+						exit(1);
+					}
+					
 					sleep(1);
 				}
+			}
+			// Check if select ended in error
+			if (res == -1){
+				fprintf(stderr, "Error: Select failed\n");
+				close(sockfd);
+				fclose(readFile);
+				fclose(echo);
+				exit(1);
+			}
+			// Client Timeout
+			if (res == -5){
+				fprintf(stderr, "Error: Unable to recieve confirm from server\n");
+				close(sockfd);
+				fclose(readFile);
+				fclose(echo);
+				exit(1);
 			}
 			if (eof) break;
 		}

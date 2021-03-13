@@ -1,20 +1,17 @@
 
-all : myclient myserver rmo
+all : myclient myserver
 
 myclient : myclient.o
-	gcc -o ./bin/myclient ./myclient.o
+	gcc -o ./myclient ./myclient.o
 
 myclient.o : 
-	gcc -c -std=c99 -Wall ./src/myclient.c
+	gcc -c -std=c99 -Wall ./myclient.c
 
 myserver : myserver.o
-	gcc -o ./bin/Server/myserver ./myserver.o
+	gcc -o ./myserver ./myserver.o
 
 myserver.o : 
-	gcc -c -std=c99 -Wall ./src/myserver.c
-
-rmo : 
-	rm -f ./myclient.o ./myserver.o
+	gcc -c -std=c99 -Wall ./myserver.c
 
 clean :
-	rm -f ./myclient.o ./myserver.o ./bin/myclient ./bin/Server/myserver
+	rm -f ./myclient.o ./myserver.o ./myclient ./myserver
