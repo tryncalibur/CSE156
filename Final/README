@@ -1,1 +1,88 @@
-Trystan Nguyen
+Trystan Nguyen 1579170
+trtanguy@ucsc.edu
+Final - UDP Echo Client / Server
+
+Files:
+	myclient.c
+		Usage: ./myclient <IP> <Port> <File 1> ... <File n>
+		When this process runs, it connects to the Server at <IP> and <Port> and begins transfer over the contents of each file, and reading the echoed content into a new file.
+
+	myserver.c
+		Usage: ./myclient <Port>
+		When this process runs, it will listen for clients to send over files and will read those that content into a file and echo the same data back.
+
+	Makefile
+		Used to make the myserver and myclient executables.
+
+
+
+Protocol:
+	Message Structure:
+	struct Message{
+		char fileName[256];
+		int sequenceNumber;
+		int bufferSize;
+		unsigned int buffer[1024];
+	};
+
+	Client:
+		Upon connecting to the Server, the Client will do the following for each file in the command arguement.
+			1. Check if file exist. If it doesn't, the client will display an error message and move on to the next file.
+			2. The Client will open the file and begin reading data segments in binary form.
+				a. For each data segment, the client will populate the struct with fileName, buffer, and buffer size. The first sequence number will be 0.
+				b. The client will send this struct to the server and await a response. 
+					- If the filename and sequence number match, the client will write the buffer to the echo file and increment the sequence number and repeat back to step 2 with the next data segment.
+					- If the filename and sequence number match and the size of the buffer is 0, the client will close the file and move on to the next file if it exists.
+					- If nothing matches, the client will do nothing.
+					- Every 30 seconds for 5 minutes, the client will resend the Message struct if nothing has been recieved. If 5 minutes have passed, the client will terminate.
+				c. After the client recieves a struct with a buffer size 0, it will close the reading and writing file. It will then move on to the next file.
+			3. When no more files exists, the client will close the sockets and terminate.
+
+	Server:
+		After setting up the socket, the Server will keep track of the following variables
+			- Filename
+			- File Pointer
+			- Expected Sequence Number
+
+		When recieving a Message Struct, the server will check and do the following:
+			1. If the File Pointer is NULL and the Message's sequence number is 0
+				- File pointer will be opened to Message's filename
+				- Filename = Message's filename
+			2. If filename matches and sequence number matches
+				- Write to file with Message Struct's buffer and buffer sizes
+				- Send Message Struct back to client
+				- Increment expected Sequence Number
+			3. If filename matches and expected sequence number is 1 + Struct Message sequence number
+				- Resend last Struct Message
+			4. If filename and sequence number matched and size of buffer is 0
+				- Close file
+				- Set file pointer = NULL
+				- Expeced Sequence number = 0
+			5. If nothing matches, the server will do nothing.
+			6. If the server recieves nothing for 3 minutes or recieves 25 consecutive connections that don't match filename, the Server will drop the current file contruction
+				- Close file
+				- Set file pointer = NULL
+				- Expeced Sequence number = 0
+
+
+	Client-Server UDP recovery Protocol
+		- The client will only handle 1 data segment at a given time and will not move on to the next until an echo has been recieved.
+		- If the client doesn't recieve an echo from the server for whatever reason, it will resend the message every 30 seconds for 5 minutes until a proper response is recieved.
+			-  If 5 minutes pass, the client will terminate itself
+
+		- The Server will only work on 1 file at a time
+			- If 5 minutes pass without any messages or 25 consecutive messages where the filename does not match the current file, the server will close the current file and be open to a new file to read.
+
+
+	Test Cases:
+		- Text files
+		- Binary Files
+		- Empty Files
+		- Multiple Files (9)
+		- Large Files (129 kb (exceeds message size))
+
+
+	Known Issues
+		- Running multiple clients will result in one file being handled at a time from an arbitrary client.
+		- If multiple clients are uploading with the same file name, it can lead to mismatched data depending on timing
+		- Unsure if UDP recovry works properly, since I am unsure on how to drop packets

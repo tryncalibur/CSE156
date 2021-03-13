@@ -78,6 +78,7 @@ int main(int argc, char* argv[]){
 	struct Message tempHold;
 
 	int res = 0;
+	int counterFile = 0;
 	while(res >= 0){
 		res = input_timeout(sockfd, 300);
 
@@ -102,6 +103,7 @@ int main(int argc, char* argv[]){
 				}
 				strcpy(fileName, recvMsg.fileName);
 				expectedSeq = 0;
+				counterFile = 0;
 			}
 			// Write to file and send back
 			if (current != NULL && expectedSeq == recvMsg.sequenceNumber && strcmp(fileName, recvMsg.fileName) == 0){
@@ -116,6 +118,7 @@ int main(int argc, char* argv[]){
 				// Increment SeqNum and Keep copy of Sent data
 				++expectedSeq;
 				tempHold = recvMsg;
+				counterFile = 0;
 			}
 			// Resend last message if failed
 			else if (strcmp(fileName, recvMsg.fileName) == 0 && recvMsg.sequenceNumber == expectedSeq - 1){
@@ -125,6 +128,7 @@ int main(int argc, char* argv[]){
 					close (sockfd);
 					exit(1);
 				}
+				counterFile = 0;
 			}
 			// End of file
 			if(strcmp(fileName, recvMsg.fileName) == 0 && recvMsg.sequenceNumber == expectedSeq - 1 && recvMsg.bufferSize == 0){
@@ -133,6 +137,8 @@ int main(int argc, char* argv[]){
 				expectedSeq = 0;
 				memset(fileName, 0 , sizeof(fileName));
 			}
+			if(strcmp(fileName, recvMsg.fileName) != 0) ++counterFile;
+			if (counterFile > 25) res = 0;
 
 		}
 
@@ -143,9 +149,6 @@ int main(int argc, char* argv[]){
 				// Close file
 				fclose(current);
 				current = NULL;
-
-				// Remove File
-				if (remove(fileName) != 0) fprintf(stderr, "\tUnable to delete current file\n");
 
 				// Reset Reading conditions
 				expectedSeq = 0;
